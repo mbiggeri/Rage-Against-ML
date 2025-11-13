@@ -8,20 +8,26 @@ import matplotlib.pyplot as plt
 import argparse
 import os
 import requests
+import sys
+import numpy as np
 
 # --- 1. Import Models ---
-# The model classes are now imported from the 'models' package
 from models import IterativeRefinementNet, StandardFeedForwardNet
+
+# Import SVM and metrics from scikit-learn
+try:
+    from sklearn.svm import SVC
+    from sklearn.metrics import accuracy_score
+except ImportError:
+    print("scikit-learn not found. SVM model will not be available.")
+    print("Please install it with: pip install scikit-learn")
+    SVC = None
+    accuracy_score = None
 
 
 # --- 2. Data Loading ---
-# (This helper function remains in main.py for now, or could be
-# moved to its own 'data_utils.py' file later)
 
 def get_monk1_data(batch_size, data_root='./data'):
-    """
-    Downloads, parses, and loads the MONK-1 dataset.
-    """
     monk_dir = os.path.join(data_root, 'monk')
     os.makedirs(monk_dir, exist_ok=True)
     
@@ -90,33 +96,32 @@ def get_monk1_data(batch_size, data_root='./data'):
 if __name__ == "__main__":
 
     # --- 3.1 Setup Command-Line Arguments ---
-    parser = argparse.ArgumentParser(description='Train a Neural Network.')
+    parser = argparse.ArgumentParser(description='Train a Neural Network or SVM.')
     
-    parser.add_argument('--model_type', type=str, required=True,
+    parser.add_argument('--model', type=str, required=True,
                         choices=['step_out', 'standard'],
-                        help='Type of model to train (iterative or standard)')
+                        help='Type of model to train (iterative, standard)')
     
     parser.add_argument('--dataset', type=str, default='mnist',
                         choices=['mnist', 'fmnist', 'kmnist', 'monk1'],
                         help='Dataset to use (mnist, f_mnist, kmnist, or monk1)')
     
     parser.add_argument('--epochs', type=int, default=5,
-                        help='Number of training epochs (default: 5)')
+                        help='Number of training epochs (default: 5).')
     parser.add_argument('--batch_size', type=int, default=64,
                         help='Training batch size (default: 64)')
     parser.add_argument('--lr', type=float, default=0.001,
-                        help='Learning rate (default: 0.001)')
+                        help='Learning rate (default: 0.001).')
     
     parser.add_argument('--hidden_sizes', type=int, nargs='+', required=True,
-                        help='A list of hidden layer sizes (e.g., --hidden_sizes 256 256 256)')
-    parser.add_argument('--state_size', type=int, default=128,
-                        help='State size for the "standard" model (default: 128)')
+                        help='A list of hidden layer sizes (e.g. --hidden_sizes 256 256 256).')
+
 
     args = parser.parse_args()
     
     # --- 3.2 Set Hyperparameters and Load Data ---
+    NUM_ITERATIONS = len(args.hidden_sizes) 
     
-    NUM_ITERATIONS = len(args.hidden_sizes)
     LEARNING_RATE = args.lr
     BATCH_SIZE = args.batch_size
     NUM_EPOCHS = args.epochs
@@ -155,7 +160,13 @@ if __name__ == "__main__":
         train_loader = DataLoader(dataset=train_dataset, batch_size=BATCH_SIZE, shuffle=True)
         test_loader = DataLoader(dataset=test_dataset, batch_size=BATCH_SIZE, shuffle=False)
 
-    # --- 3.3 Initialize Model, Loss, and Optimizer ---
+    
+    # --- 3.3 SVM MODEL PATH ---
+    # TODO: Implement SVM training and evaluation
+        
+
+    # --- 3.4 PYTORCH MODEL PATH ---
+    # This code only runs if args.model is 'step_out' or 'standard'
 
     if torch.backends.mps.is_available():
         device = torch.device('mps')
@@ -168,10 +179,10 @@ if __name__ == "__main__":
         print("Using device: CPU")
         
     print(f"Detected Input Size: {INPUT_SIZE}, Output Size: {OUTPUT_SIZE}")
-    print(f"Using Model: {args.model_type.upper()}")
+    print(f"Using Model: {args.model.upper()}")
 
     model = None
-    if args.model_type == 'iterative':
+    if args.model == 'step_out':
         model = IterativeRefinementNet(
             input_size=INPUT_SIZE,
             hidden_sizes=args.hidden_sizes,
@@ -179,17 +190,15 @@ if __name__ == "__main__":
             output_size=OUTPUT_SIZE
         ).to(device)
     
-    elif args.model_type == 'standard':
+    elif args.model == 'standard':
         model = StandardFeedForwardNet(
             input_size=INPUT_SIZE,
-            state_size=args.state_size,
             hidden_sizes=args.hidden_sizes,
-            num_iterations=NUM_ITERATIONS,
             output_size=OUTPUT_SIZE
         ).to(device)
         
     if model is None:
-        raise ValueError(f"Unknown model_type: {args.model_type}")
+        raise ValueError(f"Unknown PyTorch model_type: {args.model}")
 
     criterion = nn.CrossEntropyLoss()
     optimizer = optim.Adam(model.parameters(), lr=LEARNING_RATE)
@@ -201,7 +210,7 @@ if __name__ == "__main__":
     epoch_train_losses = []
     epoch_test_accuracies = []
 
-    # --- 3.4 Training Loop ---
+    # --- 3.5 Training Loop ---
     for epoch in range(NUM_EPOCHS):
         model.train() 
         running_loss = 0.0
@@ -226,7 +235,7 @@ if __name__ == "__main__":
         epoch_train_losses.append(avg_train_loss)
         print(f'Epoch [{epoch+1}/{NUM_EPOCHS}] complete. Average Training Loss: {avg_train_loss:.4f}')
 
-        # --- 3.5 Evaluation Loop ---
+        # --- 3.6 Evaluation Loop ---
         model.eval()
         correct = 0
         total = 0
@@ -248,7 +257,7 @@ if __name__ == "__main__":
 
     print('Finished Training!')
 
-    # --- 3.6 Plotting Results ---
+    # --- 3.7 Plotting Results ---
     print("Generating plot...")
     epochs_range = range(1, NUM_EPOCHS + 1)
 
@@ -270,7 +279,7 @@ if __name__ == "__main__":
     plt.legend()
     plt.grid(True)
     
-    plt.suptitle(f'Training Metrics ({args.dataset.upper()} - {args.model_type.title()})')
+    plt.suptitle(f'Training Metrics ({args.dataset.upper()} - {args.model.title()})')
     plt.tight_layout(rect=[0, 0.03, 1, 0.95]) 
 
     plt.show()
