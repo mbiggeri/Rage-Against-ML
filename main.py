@@ -91,6 +91,81 @@ def get_monk1_data(batch_size, data_root='./data'):
     
     return train_loader, test_loader, input_size, output_size
 
+def get_ml_cup_data(batch_size, data_root='.'):
+    # data will be in ./MLC25/
+    ml_cup_dir = os.path.join(data_root, 'MLC25')
+    os.makedirs(ml_cup_dir, exist_ok=True)
+    
+    train_file = os.path.join(ml_cup_dir, 'ML-CUP25-TR.csv')
+    test_file = os.path.join(ml_cup_dir, 'ML-CUP25-TS.csv')
+    
+    # --- Check if files exist ---
+    if not os.path.exists(train_file) or not os.path.exists(test_file):
+        print("---" * 20)
+        print(f"ERROR: ML-CUP dataset files not found.")
+        print(f"This script cannot download the ML-CUP dataset automatically.")
+        print(f"Please manually place your dataset files at these locations:")
+        print(f"Training data: {os.path.abspath(train_file)}")
+        print(f"Test data:     {os.path.abspath(test_file)}")
+        print("---" * 20)
+        sys.exit(1) # Stop the script
+
+    # --- Parser for ML-CUP data ---
+    # This parser assumes the standard ML-CUP format:
+    # - Lines starting with '#' are comments
+    # - Data is comma-separated
+    # - Column 0: ID (ignored)
+    # - Columns 1-10: 10 input features
+    # - Columns 11-12: 2 output targets (regression)
+    def parse_ml_cup_file(file_path):
+        features = []
+        labels = []
+        with open(file_path, 'r') as f:
+            for line in f:
+                line = line.strip()
+                if not line or line.startswith('#'):
+                    continue
+                
+                parts = line.split(',')
+                if len(parts) < 13:
+                    print(f"Warning: Skipping malformed line: {line}")
+                    continue
+                
+                try:
+                    # Features are columns 1 through 10 (10 features)
+                    feature_values = [float(p) for p in parts[1:11]]
+                    # Labels are columns 11 and 12 (2 targets)
+                    label_values = [float(p) for p in parts[11:13]]
+                    
+                    features.append(torch.tensor(feature_values, dtype=torch.float32))
+                    labels.append(torch.tensor(label_values, dtype=torch.float32))
+                except ValueError as e:
+                    print(f"Warning: Skipping line due to parsing error ({e}): {line}")
+
+        return torch.stack(features), torch.stack(labels)
+
+    print("Parsing ML-CUP data...")
+    train_x, train_y = parse_ml_cup_file(train_file)
+    test_x, test_y = parse_ml_cup_file(test_file)
+    
+    train_dataset = TensorDataset(train_x, train_y)
+    test_dataset = TensorDataset(test_x, test_y)
+    
+    train_loader = DataLoader(dataset=train_dataset, batch_size=batch_size, shuffle=True)
+    test_loader = DataLoader(dataset=test_dataset, batch_size=batch_size, shuffle=False)
+    
+    # Based on the parser above
+    input_size = 10
+    output_size = 2
+    
+    print("---" * 10)
+    print("WARNING: The 'step_out' model uses a final-state activation (e.g., ReLU).")
+    print("This is likely unsuitable for the ML-CUP regression task (which can have")
+    print("negative targets). The 'standard' model is recommended.")
+    print("---" * 10)
+    
+    return train_loader, test_loader, input_size, output_size
+
 
 # --- 3. Main Training Script ---
 if __name__ == "__main__":
@@ -103,8 +178,8 @@ if __name__ == "__main__":
                         help='Type of model to train (iterative, standard)')
     
     parser.add_argument('--dataset', type=str, default='mnist',
-                        choices=['mnist', 'fmnist', 'kmnist', 'monk1'],
-                        help='Dataset to use (mnist, f_mnist, kmnist, or monk1)')
+                        choices=['mnist', 'fmnist', 'kmnist', 'monk1', 'mlc25'],
+                        help='Dataset to use (mnist, f_mnist, kmnist, monk1 or mlc25).')
     
     parser.add_argument('--epochs', type=int, default=5,
                         help='Number of training epochs (default: 5).')
@@ -115,6 +190,10 @@ if __name__ == "__main__":
     
     parser.add_argument('--hidden_sizes', type=int, nargs='+', required=True,
                         help='A list of hidden layer sizes (e.g. --hidden_sizes 256 256 256).')
+    
+    parser.add_argument('--activation', type=str, default='relu',
+                        choices=['relu', 'tanh', 'sigmoid'],
+                        help='Activation function for hidden layers (default: relu).')
 
 
     args = parser.parse_args()
@@ -125,6 +204,7 @@ if __name__ == "__main__":
     LEARNING_RATE = args.lr
     BATCH_SIZE = args.batch_size
     NUM_EPOCHS = args.epochs
+    ACTIVATION = args.activation
 
     train_loader = None
     test_loader = None
@@ -135,6 +215,12 @@ if __name__ == "__main__":
     print(f"Loading dataset: {args.dataset.upper()}")
     if args.dataset == 'monk1':
         train_loader, test_loader, INPUT_SIZE, OUTPUT_SIZE = get_monk1_data(BATCH_SIZE, data_root)
+        
+    elif args.dataset == 'mlc25':
+        train_loader, test_loader, INPUT_SIZE, OUTPUT_SIZE = get_ml_cup_data(BATCH_SIZE)
+        is_regression_task = True
+        metric_name = "Test MSE" # Update metric name for regression (not classification accuracy)
+        
     else:
         if args.dataset == 'mnist':
             normalize_mean, normalize_std = (0.1307,), (0.3081,)
@@ -180,6 +266,7 @@ if __name__ == "__main__":
         
     print(f"Detected Input Size: {INPUT_SIZE}, Output Size: {OUTPUT_SIZE}")
     print(f"Using Model: {args.model.upper()}")
+    print(f"Using Activation: {ACTIVATION.upper()}")
 
     model = None
     if args.model == 'step_out':
@@ -187,20 +274,27 @@ if __name__ == "__main__":
             input_size=INPUT_SIZE,
             hidden_sizes=args.hidden_sizes,
             num_iterations=NUM_ITERATIONS,
-            output_size=OUTPUT_SIZE
+            output_size=OUTPUT_SIZE,
+            activation_str=ACTIVATION
         ).to(device)
     
     elif args.model == 'standard':
         model = StandardFeedForwardNet(
             input_size=INPUT_SIZE,
             hidden_sizes=args.hidden_sizes,
-            output_size=OUTPUT_SIZE
+            output_size=OUTPUT_SIZE,
+            activation_str=ACTIVATION
         ).to(device)
         
     if model is None:
         raise ValueError(f"Unknown PyTorch model_type: {args.model}")
 
-    criterion = nn.CrossEntropyLoss()
+    # --- Select Loss Function based on task ---
+    if is_regression_task:
+        criterion = nn.MSELoss()
+    else:
+        criterion = nn.CrossEntropyLoss()
+        
     optimizer = optim.Adam(model.parameters(), lr=LEARNING_RATE)
 
     print("Model architecture:")
@@ -208,7 +302,7 @@ if __name__ == "__main__":
     print(f"Training for {NUM_EPOCHS} epochs...")
 
     epoch_train_losses = []
-    epoch_test_accuracies = []
+    epoch_test_metrics = []
 
     # --- 3.5 Training Loop ---
     for epoch in range(NUM_EPOCHS):
@@ -217,6 +311,10 @@ if __name__ == "__main__":
         for i, (data, labels) in enumerate(train_loader):
             data = data.to(device)
             labels = labels.to(device)
+            
+            # For classification, data needs flattening (e.g., MNIST)
+            # For regression, data is already flat (e.g., ML-CUP)
+            # The models handle this flattening internally
             
             outputs = model(data)
             loss = criterion(outputs, labels)
@@ -237,22 +335,34 @@ if __name__ == "__main__":
 
         # --- 3.6 Evaluation Loop ---
         model.eval()
-        correct = 0
-        total = 0
+        running_metric = 0.0    # Could be accuracy or MSE
+        correct = 0     # For classification accuracy
+        total = 0   # For classification accuracy
         with torch.no_grad():
             for data, labels in test_loader:
                 data = data.to(device)
                 labels = labels.to(device)
                 
                 outputs = model(data)
-                _, predicted = torch.max(outputs.data, 1)
                 
-                total += labels.size(0)
-                correct += (predicted == labels).sum().item()
+                if is_regression_task:
+                    # Calculate loss (MSE) for regression
+                    loss = criterion(outputs, labels)
+                    running_metric += loss.item()
+                else:
+                    # Calculate accuracy for classification
+                    _, predicted = torch.max(outputs.data, 1)
+                    total += labels.size(0)
+                    correct += (predicted == labels).sum().item()
 
-        accuracy = 100 * correct / total
-        epoch_test_accuracies.append(accuracy)
-        print(f'Accuracy of the network after epoch {epoch+1}: {accuracy:.2f} %')
+        if is_regression_task:
+            metric = running_metric / len(test_loader) # Average Test MSE
+            epoch_test_metrics.append(metric)
+            print(f'Average Test MSE (lower is better) after epoch {epoch+1}: {metric:.4f}')
+        else:
+            metric = 100 * correct / total # Test Accuracy
+            epoch_test_metrics.append(metric)
+            print(f'Accuracy of the network after epoch {epoch+1}: {metric:.2f} %')
 
 
     print('Finished Training!')
@@ -272,10 +382,10 @@ if __name__ == "__main__":
     plt.grid(True)
 
     plt.subplot(1, 2, 2)
-    plt.plot(epochs_range, epoch_test_accuracies, 'o-', label='Test Accuracy')
+    plt.plot(epochs_range, epoch_test_metrics, 'o-', label='Test Accuracy')
     plt.title('Test Accuracy')
     plt.xlabel('Epoch')
-    plt.ylabel('Accuracy (%)')
+    plt.ylabel(metric_name)
     plt.legend()
     plt.grid(True)
     

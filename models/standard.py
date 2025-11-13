@@ -1,16 +1,32 @@
 import torch
 import torch.nn as nn
 
-# --- Model 2: Standard Feed-Forward ("classic" / "standard") ---
+# Activation function mapping ---
+# Defined here so both classes can use it
+ACTIVATION_MAP = {
+    'relu': nn.ReLU,
+    'tanh': nn.Tanh,
+    'sigmoid': nn.Sigmoid
+}
+
 class StandardFeedForwardNet(nn.Module):
     """
     A standard "deep" feed-forward network (MLP).
     The architecture is built from the hidden_sizes list.
-    e.g., hidden_sizes=[256, 128] will create:
-    Input -> Linear(In, 256) -> ReLU -> Linear(256, 128) -> ReLU -> Linear(128, Out)
+    Accepts an 'activation_str' to define the hidden activation function.
     """
-    def __init__(self, input_size, hidden_sizes, output_size):
+    def __init__(self, input_size, hidden_sizes, output_size, activation_str='relu'):
         super(StandardFeedForwardNet, self).__init__()
+        
+        # --- NEW: Activation function mapping ---
+        activations = {
+            'relu': nn.ReLU,
+            'tanh': nn.Tanh,
+            'sigmoid': nn.Sigmoid
+        }
+        activation_fn = activations.get(activation_str.lower())
+        if activation_fn is None:
+            raise ValueError(f"Unknown activation function: {activation_str}")
         
         layers = []
         
@@ -20,14 +36,16 @@ class StandardFeedForwardNet(nn.Module):
         else:
             # 1. Input layer to first hidden layer
             layers.append(nn.Linear(input_size, hidden_sizes[0]))
-            layers.append(nn.ReLU())
+            layers.append(activation_fn()) # Use selected activation
             
             # 2. Intermediate hidden layers
             for i in range(len(hidden_sizes) - 1):
                 layers.append(nn.Linear(hidden_sizes[i], hidden_sizes[i+1]))
-                layers.append(nn.ReLU())
+                layers.append(activation_fn()) # Use selected activation
             
             # 3. Last hidden layer to output layer
+            # (No activation here, as required for both regression (MSE)
+            # and classification (CrossEntropyLoss))
             layers.append(nn.Linear(hidden_sizes[-1], output_size))
         
         self.layers = nn.Sequential(*layers)
