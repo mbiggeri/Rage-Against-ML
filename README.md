@@ -12,3 +12,5 @@
 python main.py --model standard --dataset monk1 --epochs 1000 --hidden_sizes 3 3
 
 6) Sarebbe utile implementare un early-stopping per evitare che il modello overfitti senza dover cercare un numero preciso di epoche di addestramento
+
+7) Vi aggiungo poi anche altra roba che era utilizzata nella tesi per testare diverse funzioni di attivazione, aggiungere il momentum come iperparametro, ecc...
