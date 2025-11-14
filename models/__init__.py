@@ -3,3 +3,4 @@
 
 from .step_out import IterativeRefinementNet
 from .standard import StandardFeedForwardNet
+from .ensemble import EnsembleModel
