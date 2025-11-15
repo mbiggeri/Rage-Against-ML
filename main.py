@@ -229,7 +229,9 @@ if __name__ == "__main__":
     print(f"Loading dataset: {args.dataset.upper()}")
     if args.dataset == 'monk1':
         train_loader, test_loader, INPUT_SIZE, OUTPUT_SIZE = get_monk1_data(BATCH_SIZE, data_root)
-        
+        is_regression_task = False
+        metric_name = "Test Accuracy (%)"
+
     elif args.dataset == 'mlc25':
         train_loader, test_loader, INPUT_SIZE, OUTPUT_SIZE = get_ml_cup_data(BATCH_SIZE)
         is_regression_task = True
@@ -239,12 +241,18 @@ if __name__ == "__main__":
         if args.dataset == 'mnist':
             normalize_mean, normalize_std = (0.1307,), (0.3081,)
             dataset_class = torchvision.datasets.MNIST
+            is_regression_task = False
+            metric_name = "Test Accuracy (%)"
         elif args.dataset == 'fmnist':
             normalize_mean, normalize_std = (0.2860,), (0.3530,)
             dataset_class = torchvision.datasets.FashionMNIST
+            is_regression_task = False
+            metric_name = "Test Accuracy (%)"
         elif args.dataset == 'kmnist':
             normalize_mean, normalize_std = (0.1918,), (0.3483,)
             dataset_class = torchvision.datasets.KMNIST
+            is_regression_task = False
+            metric_name = "Test Accuracy (%)"
 
         INPUT_SIZE = 784
         OUTPUT_SIZE = 10
