@@ -91,13 +91,27 @@ def get_monk1_data(batch_size, data_root='./data'):
     
     return train_loader, test_loader, input_size, output_size
 
-def get_ml_cup_data(batch_size, data_root='.'):
+def get_ml_cup_data(batch_size, data_root='./data'):
     # data will be in ./MLC25/
     ml_cup_dir = os.path.join(data_root, 'MLC25')
     os.makedirs(ml_cup_dir, exist_ok=True)
     
     train_file = os.path.join(ml_cup_dir, 'ML-CUP25-TR.csv')
     test_file = os.path.join(ml_cup_dir, 'ML-CUP25-TS.csv')
+
+    if not os.path.exists(train_file):
+        print("Downloading ML-CUP25-TR train data...")
+        url = "https://gist.githubusercontent.com/FlavRomano/a19771d5c67f71dad557e5fa384db38b/raw/7290bff843b8a5c3a650457281c93c1d54e55f51/ML-CUP25-TR.csv"
+        r = requests.get(url)
+        with open(train_file, 'w') as f:
+            f.write(r.text)
+            
+    if not os.path.exists(test_file):
+        print("Downloading ML-CUP25-TS test data...")
+        url = "https://gist.githubusercontent.com/FlavRomano/453dc2affc584028cb122d6b52cec295/raw/1cb1e84b26f8efd2ac081701d610c94498f988e1/ML-CUP25-TS.csv"
+        r = requests.get(url)
+        with open(test_file, 'w') as f:
+            f.write(r.text)
     
     # --- Check if files exist ---
     if not os.path.exists(train_file) or not os.path.exists(test_file):

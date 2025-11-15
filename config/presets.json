@@ -1,0 +1,125 @@
+{
+	"monk1_standard": {
+		"model": "standard",
+		"dataset": "monk1",
+		"activation": "tanh",
+		"hidden_sizes": [3],
+		"epochs": 1000,
+		"batch_size": 64,
+		"lr": 0.001
+	},
+
+	"mlcup_standard": {
+		"model": "standard",
+		"dataset": "mlc25",
+		"activation": "tanh",
+		"hidden_sizes": [50, 20],
+		"epochs": 150,
+		"batch_size": 64,
+		"lr": 0.001
+	},
+
+	"mnist_standard": {
+		"model": "standard",
+		"dataset": "mnist",
+		"activation": "sigmoid",
+		"hidden_sizes": [256, 128, 64],
+		"epochs": 10,
+		"batch_size": 64,
+		"lr": 0.001
+	},
+
+	"mnist_stepout": {
+		"model": "step_out",
+		"dataset": "mnist",
+		"activation": "sigmoid",
+		"hidden_sizes": [256, 128, 64],
+		"epochs": 10,
+		"batch_size": 64,
+		"lr": 0.001
+	},
+
+	"mnist_ensemble": {
+		"model": "ensemble",
+		"shared": {
+			"dataset": "mnist",
+			"epochs": 10,
+			"batch_size": 64
+		},
+		"weights": [1.0, 1.0],
+		"members": [
+			{
+				"name": "standard",
+				"activation": "sigmoid",
+				"hidden_sizes": [256, 128, 64],
+				"lr": 0.001
+			},
+			{
+				"name": "step_out",
+				"activation": "sigmoid",
+				"hidden_sizes": [256, 128, 64],
+				"lr": 0.001
+			}
+		]
+	},
+
+	"mlc25_ensemble": {
+		"model": "ensemble",
+		"shared": {
+			"dataset": "mlc25",
+			"epochs": 150,
+			"batch_size": 64
+		},
+		"weights": [1.0, 1.0],
+		"members": [
+			{
+				"name": "standard",
+				"activation": "tanh",
+				"hidden_sizes": [50, 20],
+				"lr": 0.001
+			},
+			{
+				"name": "step_out",
+				"activation": "tanh",
+				"hidden_sizes": [50, 20],
+				"lr": 0.001
+			}
+		]
+	},
+
+	"custom_ensemble": {
+		"model": "ensemble",
+		"shared": {
+			"dataset": "mnist",
+			"epochs": 10,
+			"batch_size": 64
+		},
+		"weights": [1.0, 1.0, 1.0, 1.0],
+		"members": [
+			{
+				"name": "standard",
+				"activation": "relu",
+				"hidden_sizes": [256, 128, 64],
+				"lr": 0.001
+			},
+			{
+				"name": "step_out",
+				"activation": "tanh",
+				"hidden_sizes": [128, 64, 32],
+				"lr": 0.001
+			},
+			{
+				"name": "standard",
+				"activation": "sigmoid",
+				"hidden_sizes": [64, 32, 16],
+				"lr": 0.001
+			},
+			{
+				"name": "step_out",
+				"activation": "gelu",
+				"hidden_sizes": [64, 32, 16],
+				"lr": 0.001
+			}
+		]
+	}
+}
