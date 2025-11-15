@@ -17,9 +17,15 @@
 
 - Implementare SVM
 
+- Per MLP: 
+1. implementare dropout e L2 regularization
+2. Controllare come influisce lo scaling dei dati in input
+
 - Implementare altri modelli interessanti
 
 - Implementare ricerca con Optuna
+
+- Provare a implementare Random Forest
 -----
 
 ## Esempi di script per avviare il programma
