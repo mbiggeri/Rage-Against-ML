@@ -6,7 +6,8 @@ import torch.nn as nn
 ACTIVATION_MAP = {
     'relu': nn.ReLU,
     'tanh': nn.Tanh,
-    'sigmoid': nn.Sigmoid
+    'sigmoid': nn.Sigmoid,
+    'gelu': nn.GELU
 }
 
 class StandardFeedForwardNet(nn.Module):
