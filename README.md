@@ -38,6 +38,18 @@ python main.py --model step_out --dataset mnist --activation sigmoid --hidden_si
 
 -----
 
+
+## Script SVM
+Script base per provare modelli di SVC e SVR sui vari dataset. Di seguito alcuni comandi di esempio per provarlo:
+
+python run_svm.py --model svr --dataset mlc25 --svm_kernel poly
+
+python run_svm.py --model svr --dataset mlc25 --svm_kernel rbf  --C 2.0 --gamma scale
+
+python run_svm.py --model svc --dataset monk1 --svm_kernel linear
+
+python run_svm.py --model svc --dataset monk1 --svm_kernel rbf --C 1.0 --gamma scale
+
 ## Ricerca Iperparametri (Optuna)
 
 Lo script `optuna_search.py` permette di cercare automaticamente la migliore combinazione di parametri (learning rate, numero di neuroni, funzioni di attivazione e tutto quello che vuoi amore).
