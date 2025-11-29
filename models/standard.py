@@ -19,13 +19,8 @@ class StandardFeedForwardNet(nn.Module):
     def __init__(self, input_size, hidden_sizes, output_size, activation_str='relu'):
         super(StandardFeedForwardNet, self).__init__()
         
-        # --- NEW: Activation function mapping ---
-        activations = {
-            'relu': nn.ReLU,
-            'tanh': nn.Tanh,
-            'sigmoid': nn.Sigmoid
-        }
-        activation_fn = activations.get(activation_str.lower())
+        # FIX: Use the global ACTIVATION_MAP which includes 'gelu'
+        activation_fn = ACTIVATION_MAP.get(activation_str.lower())
         if activation_fn is None:
             raise ValueError(f"Unknown activation function: {activation_str}")
         
