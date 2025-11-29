@@ -1,0 +1,5 @@
+{
+	"batchSize": 32,
+	"optimizer": "sgd",
+	"seed": 102953
+}

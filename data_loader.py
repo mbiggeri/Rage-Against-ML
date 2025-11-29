@@ -3,6 +3,17 @@ import torch
 import requests
 import sys
 from torch.utils.data import DataLoader, TensorDataset
+from dataloaders import MLCupDataLoader, MLCupDataset
+
+from sklearn.preprocessing import *
+from sklearn.model_selection import train_test_split
+from sklearn.base import TransformerMixin
+
+import json
+
+with open('./config/keras_nn.json') as keras_nn_config:
+    CONFIG = json.load(keras_nn_config)
+    print("config loaded")
 
 # --- 2. Data Loading ---
 
@@ -70,7 +81,7 @@ def get_monk1_data(batch_size, data_root='./data'):
     
     return train_loader, test_loader, input_size, output_size
 
-def get_ml_cup_data(batch_size, data_root='./data'):
+def get_ml_cup_data(batch_size, data_root='./data', validation: bool=False, validation_ratio=.15, scaler: TransformerMixin=None) -> tuple[MLCupDataLoader, MLCupDataLoader, MLCupDataLoader, int, int]:
     # data will be in ./MLC25/
     ml_cup_dir = os.path.join(data_root, 'MLC25')
     os.makedirs(ml_cup_dir, exist_ok=True)
@@ -140,15 +151,31 @@ def get_ml_cup_data(batch_size, data_root='./data'):
     print("Parsing ML-CUP data...")
     train_x, train_y = parse_ml_cup_file(train_file)
     test_x, test_y = parse_ml_cup_file(test_file)
+
+    if validation:
+        train_x, val_x, train_y, val_y = train_test_split(train_x, train_y, test_size=validation_ratio, random_state=CONFIG["seed"]) 
+
+    if scaler:
+        print(f"applying scaling {scaler.__class__.__name__} on train_X and test_X")
+        scaler.fit(train_x)
+        train_x = scaler.transform(train_x)
+        if validation:
+            val_x = scaler.transform(val_x)
+        test_x = scaler.transform(test_x)
     
-    train_dataset = TensorDataset(train_x, train_y)
-    test_dataset = TensorDataset(test_x, test_y)
+    validation_loader = None
+    if validation:
+        val_dataset = MLCupDataset(val_x, val_y)
+        validation_loader = MLCupDataLoader(dataset=val_dataset, batch_size=batch_size, shuffle=True)
+
+    train_dataset = MLCupDataset(train_x, train_y)
+    test_dataset = MLCupDataset(test_x, test_y)
     
-    train_loader = DataLoader(dataset=train_dataset, batch_size=batch_size, shuffle=True)
-    test_loader = DataLoader(dataset=test_dataset, batch_size=batch_size, shuffle=False)
-    
+    train_loader = MLCupDataLoader(dataset=train_dataset, batch_size=batch_size, shuffle=True)
+    test_loader = MLCupDataLoader(dataset=test_dataset, batch_size=batch_size, shuffle=False)
+
     # Based on the parser above
     input_size = 10
     output_size = 2
     
-    return train_loader, test_loader, input_size, output_size
+    return train_loader, validation_loader, test_loader, input_size, output_size

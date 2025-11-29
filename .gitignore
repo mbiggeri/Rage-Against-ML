@@ -15,3 +15,4 @@ temp/
 outputs/
 *.log
 .DS_Store
+*.code-workspace
