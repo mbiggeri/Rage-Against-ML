@@ -6,6 +6,7 @@ from torch.utils.data import DataLoader, TensorDataset
 from dataloaders import MLCupDataLoader, MLCupDataset
 
 from sklearn.preprocessing import *
+from sklearn.model_selection import train_test_split
 from sklearn.base import TransformerMixin
 
 # --- 2. Data Loading ---
@@ -74,7 +75,7 @@ def get_monk1_data(batch_size, data_root='./data'):
     
     return train_loader, test_loader, input_size, output_size
 
-def get_ml_cup_data(batch_size, data_root='./data', scaler: TransformerMixin=None) -> tuple[MLCupDataLoader, MLCupDataLoader, int, int]:
+def get_ml_cup_data(batch_size, data_root='./data', test_ratio=.10, validation_ratio=.15, scaler: TransformerMixin=None) -> tuple[MLCupDataLoader, MLCupDataLoader, int, int]:
     # data will be in ./MLC25/
     ml_cup_dir = os.path.join(data_root, 'MLC25')
     os.makedirs(ml_cup_dir, exist_ok=True)
@@ -144,21 +145,25 @@ def get_ml_cup_data(batch_size, data_root='./data', scaler: TransformerMixin=Non
     print("Parsing ML-CUP data...")
     train_x, train_y = parse_ml_cup_file(train_file)
     test_x, test_y = parse_ml_cup_file(test_file)
+    val_x, test_x, val_y, test_y = train_test_split(test_x, test_y, test_size=test_ratio/(test_ratio + validation_ratio)) 
 
     if scaler:
         print(f"applying scaling {scaler.__class__.__name__} on train_X and test_X")
         scaler.fit(train_x)
         train_x = scaler.transform(train_x)
+        val_x = scaler.fit_transform(val_x)
         test_x = scaler.transform(test_x)
     
     train_dataset = MLCupDataset(train_x, train_y)
     test_dataset = MLCupDataset(test_x, test_y)
+    val_dataset = MLCupDataset(val_x, val_y)
     
     train_loader = MLCupDataLoader(dataset=train_dataset, batch_size=batch_size, shuffle=True)
     test_loader = MLCupDataLoader(dataset=test_dataset, batch_size=batch_size, shuffle=False)
-    
+    validation_loader = MLCupDataLoader(dataset=val_dataset, batch_size=batch_size, shuffle=True)
+
     # Based on the parser above
     input_size = 10
     output_size = 2
     
-    return train_loader, test_loader, input_size, output_size
+    return train_loader, validation_loader, test_loader, input_size, output_size
