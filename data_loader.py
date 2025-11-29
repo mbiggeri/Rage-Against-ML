@@ -9,6 +9,12 @@ from sklearn.preprocessing import *
 from sklearn.model_selection import train_test_split
 from sklearn.base import TransformerMixin
 
+import json
+
+with open('./config/keras_nn.json') as keras_nn_config:
+    CONFIG = json.load(keras_nn_config)
+    print("config loaded")
+
 # --- 2. Data Loading ---
 
 def get_monk1_data(batch_size, data_root='./data'):
@@ -75,7 +81,7 @@ def get_monk1_data(batch_size, data_root='./data'):
     
     return train_loader, test_loader, input_size, output_size
 
-def get_ml_cup_data(batch_size, data_root='./data', validation: bool=True, test_ratio=.10, validation_ratio=.15, scaler: TransformerMixin=None) -> tuple[MLCupDataLoader, MLCupDataLoader, MLCupDataLoader, int, int]:
+def get_ml_cup_data(batch_size, data_root='./data', validation: bool=False, validation_ratio=.15, scaler: TransformerMixin=None) -> tuple[MLCupDataLoader, MLCupDataLoader, MLCupDataLoader, int, int]:
     # data will be in ./MLC25/
     ml_cup_dir = os.path.join(data_root, 'MLC25')
     os.makedirs(ml_cup_dir, exist_ok=True)
@@ -147,14 +153,14 @@ def get_ml_cup_data(batch_size, data_root='./data', validation: bool=True, test_
     test_x, test_y = parse_ml_cup_file(test_file)
 
     if validation:
-        val_x, test_x, val_y, test_y = train_test_split(test_x, test_y, test_size=test_ratio/(test_ratio + validation_ratio)) 
+        train_x, val_x, train_y, val_y = train_test_split(train_x, train_y, test_size=validation_ratio, random_state=CONFIG["seed"]) 
 
     if scaler:
         print(f"applying scaling {scaler.__class__.__name__} on train_X and test_X")
         scaler.fit(train_x)
         train_x = scaler.transform(train_x)
         if validation:
-            val_x = scaler.fit_transform(val_x)
+            val_x = scaler.transform(val_x)
         test_x = scaler.transform(test_x)
     
     validation_loader = None
