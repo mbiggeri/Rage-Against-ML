@@ -1,4 +1,6 @@
 import shutil
+import optuna
+import os
 
 def delete_pruned_trial_dirs(root_path, study):
     pruned_numbers = {

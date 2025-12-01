@@ -11,7 +11,7 @@
 	},
 	"nn": {
 		"optimizer": "sgd",
-		"epochs": 200,
+		"epochs": 100,
 		"hidden": [
 			{
 				"units": 64,
@@ -31,7 +31,7 @@
 	},
 	"optuna": {
 		"optimizer": "sgd",
-		"epochs": 200,
+		"epochs": 100,
 		"suggestions": {
 			"hidden": [
 				{
