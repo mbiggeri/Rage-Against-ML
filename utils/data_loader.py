@@ -14,6 +14,7 @@ import json
 with open('./config/keras_nn.json') as keras_nn_config:
     CONFIG = json.load(keras_nn_config)
     print("config loaded")
+>>>>>>>>> Temporary merge branch 2
 
 # --- 2. Data Loading ---
 
@@ -179,3 +180,4 @@ def get_ml_cup_data(batch_size, data_root='./data', validation: bool=False, vali
     output_size = 2
     
     return train_loader, validation_loader, test_loader, input_size, output_size
+>>>>>>>>> Temporary merge branch 2
