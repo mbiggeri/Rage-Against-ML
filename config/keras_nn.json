@@ -1,5 +1,54 @@
 {
 	"batchSize": 32,
-	"optimizer": "sgd",
-	"seed": 102953
+	"scaler": {
+		"enabled": true,
+		"type": "Standard"
+	},
+	"seed": 102953,
+	"validation": {
+		"enabled": true,
+		"ratio": 0.5
+	},
+	"nn": {
+		"optimizer": "sgd",
+		"epochs": 200,
+		"hidden": [
+			{
+				"units": 64,
+				"activation": "relu"
+			},
+			{
+				"units": 32,
+				"activation": "relu"
+			}
+		],
+		"earlyStopping": {
+			"enabled": true,
+			"patience": 10,
+			"mode": "min",
+			"restoreBestWeight": true
+		}
+	},
+	"optuna": {
+		"optimizer": "sgd",
+		"epochs": 200,
+		"suggestions": {
+			"hidden": [
+				{
+					"range": [16, 128],
+					"activation": "relu"
+				},
+				{
+					"range": [16, 128],
+					"activation": "relu"
+				}
+			]
+		},
+		"earlyStopping": {
+			"enabled": true,
+			"patience": 10,
+			"mode": "min",
+			"restoreBestWeight": true
+		}
+	}
 }
