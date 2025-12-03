@@ -137,9 +137,9 @@ def get_ml_cup_data(batch_size, data_root='./data', validation: bool=False, vali
                 
                 try:
                     # Features are columns 1 through 10 (10 features)
-                    feature_values = [float(p) for p in parts[1:11]]
+                    feature_values = [float(p) for p in parts[1:13]]
                     # Labels are columns 11 and 12 (2 targets)
-                    label_values = [float(p) for p in parts[11:13]]
+                    label_values = [float(p) for p in parts[13:17]]
                     
                     features.append(torch.tensor(feature_values, dtype=torch.float32))
                     labels.append(torch.tensor(label_values, dtype=torch.float32))
