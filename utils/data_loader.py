@@ -119,8 +119,8 @@ def get_ml_cup_data(batch_size, data_root='./data', validation: bool=False, vali
     # - Lines starting with '#' are comments
     # - Data is comma-separated
     # - Column 0: ID (ignored)
-    # - Columns 1-10: 10 input features
-    # - Columns 11-12: 2 output targets (regression)
+    # - Columns 1-12: 12 input features
+    # - Columns 13-17: 4 output targets (regression)
     def parse_ml_cup_file(file_path):
         features = []
         labels = []
@@ -136,9 +136,9 @@ def get_ml_cup_data(batch_size, data_root='./data', validation: bool=False, vali
                     continue
                 
                 try:
-                    # Features are columns 1 through 10 (10 features)
+                    # Features are columns 1 through 12 (12 features)
                     feature_values = [float(p) for p in parts[1:13]]
-                    # Labels are columns 11 and 12 (2 targets)
+                    # Labels are columns 13 and 17 (4 targets)
                     label_values = [float(p) for p in parts[13:17]]
                     
                     features.append(torch.tensor(feature_values, dtype=torch.float32))
@@ -175,7 +175,7 @@ def get_ml_cup_data(batch_size, data_root='./data', validation: bool=False, vali
     test_loader = MLCupDataLoader(dataset=test_dataset, batch_size=batch_size, shuffle=False)
 
     # Based on the parser above
-    input_size = 10
-    output_size = 2
+    input_size = 12
+    output_size = 4
     
     return train_loader, validation_loader, test_loader, input_size, output_size
