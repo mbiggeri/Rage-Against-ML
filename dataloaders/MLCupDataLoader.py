@@ -15,3 +15,13 @@ class MLCupDataset(Dataset):
 
     def __getitem__(self, idx):
         return self.X[idx], self.y[idx]
+    
+class MLCupBlindDataset(Dataset):
+    def __init__(self, X):
+        self.X = X
+
+    def __len__(self):
+        return len(self.X)
+
+    def __getitem__(self, idx):
+        return self.X[idx]

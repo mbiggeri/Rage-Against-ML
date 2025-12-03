@@ -2,6 +2,7 @@ import os
 import torch
 import requests
 import sys
+import pandas as pd
 from torch.utils.data import DataLoader, TensorDataset
 from dataloaders import MLCupDataLoader, MLCupDataset
 
@@ -81,7 +82,7 @@ def get_monk1_data(batch_size, data_root='./data'):
     
     return train_loader, test_loader, input_size, output_size
 
-def get_ml_cup_data(batch_size, data_root='./data', validation: bool=False, validation_ratio=.15, scaler: TransformerMixin=None) -> tuple[MLCupDataLoader, MLCupDataLoader, MLCupDataLoader, int, int]:
+def get_ml_cup_data(batch_size, data_root='./data', test_ratio=0.20, mps=False, scaler: TransformerMixin=None) -> tuple[MLCupDataLoader, MLCupDataLoader]:
     # data will be in ./MLC25/
     ml_cup_dir = os.path.join(data_root, 'MLC25')
     os.makedirs(ml_cup_dir, exist_ok=True)
@@ -114,68 +115,36 @@ def get_ml_cup_data(batch_size, data_root='./data', validation: bool=False, vali
         print("---" * 20)
         sys.exit(1) # Stop the script
 
-    # --- Parser for ML-CUP data ---
-    # This parser assumes the standard ML-CUP format:
-    # - Lines starting with '#' are comments
-    # - Data is comma-separated
-    # - Column 0: ID (ignored)
-    # - Columns 1-12: 12 input features
-    # - Columns 13-17: 4 output targets (regression)
-    def parse_ml_cup_file(file_path):
-        features = []
-        labels = []
-        with open(file_path, 'r') as f:
-            for line in f:
-                line = line.strip()
-                if not line or line.startswith('#'):
-                    continue
-                
-                parts = line.split(',')
-                if len(parts) < 13:
-                    print(f"Warning: Skipping malformed line: {line}")
-                    continue
-                
-                try:
-                    # Features are columns 1 through 12 (12 features)
-                    feature_values = [float(p) for p in parts[1:13]]
-                    # Labels are columns 13 and 17 (4 targets)
-                    label_values = [float(p) for p in parts[13:17]]
-                    
-                    features.append(torch.tensor(feature_values, dtype=torch.float32))
-                    labels.append(torch.tensor(label_values, dtype=torch.float32))
-                except ValueError as e:
-                    print(f"Warning: Skipping line due to parsing error ({e}): {line}")
+    N_INPUTS = CONFIG["nInputs"]
+    N_TARGETS = CONFIG["nTargets"]
 
-        return torch.stack(features), torch.stack(labels)
-
-    print("Parsing ML-CUP data...")
-    train_x, train_y = parse_ml_cup_file(train_file)
-    test_x, test_y = parse_ml_cup_file(test_file)
-
-    if validation:
-        train_x, val_x, train_y, val_y = train_test_split(train_x, train_y, test_size=validation_ratio, random_state=CONFIG["seed"]) 
+    ## Training set: ID, INPUTS, TARGET_1, TARGET_2, TARGET_3, TARGET_4 (last 4 columns)
+    columns = (
+        ["ID"] +
+        [f"INPUT_{i}" for i in range(N_INPUTS)] +
+        [f"TARGET_{i}" for i in range(N_TARGETS)]
+    )
+    ml_cup_tr = pd.read_csv("./data/MLC25/ML-CUP25-TR.csv", skiprows=7, names=columns)
+    train_x = ml_cup_tr[[f"INPUT_{i}" for i in range(N_INPUTS)]].values
+    train_y = ml_cup_tr[[f"TARGET_{i}" for i in range(N_TARGETS)]].values
+    train_x, test_x, train_y, test_y = train_test_split(train_x, train_y, test_size=test_ratio, random_state=CONFIG["seed"]) 
 
     if scaler:
         print(f"applying scaling {scaler.__class__.__name__} on train_X and test_X")
         scaler.fit(train_x)
         train_x = scaler.transform(train_x)
-        if validation:
-            val_x = scaler.transform(val_x)
         test_x = scaler.transform(test_x)
-    
-    validation_loader = None
-    if validation:
-        val_dataset = MLCupDataset(val_x, val_y)
-        validation_loader = MLCupDataLoader(dataset=val_dataset, batch_size=batch_size, shuffle=True)
+
+    if mps:
+        train_x = train_x.astype("float32")
+        train_y = train_y.astype("float32")
+        test_x = test_x.astype("float32")
+        test_y = test_y.astype("float32")
 
     train_dataset = MLCupDataset(train_x, train_y)
-    test_dataset = MLCupDataset(test_x, test_y)
-    
     train_loader = MLCupDataLoader(dataset=train_dataset, batch_size=batch_size, shuffle=True)
+
+    test_dataset = MLCupDataset(test_x, test_y)
     test_loader = MLCupDataLoader(dataset=test_dataset, batch_size=batch_size, shuffle=False)
 
-    # Based on the parser above
-    input_size = 12
-    output_size = 4
-    
-    return train_loader, validation_loader, test_loader, input_size, output_size
+    return train_loader, test_loader
