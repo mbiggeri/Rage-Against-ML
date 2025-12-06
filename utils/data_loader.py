@@ -115,8 +115,8 @@ def get_ml_cup_data(batch_size, data_root='./data', test_ratio=0.20, mps=False, 
         print("---" * 20)
         sys.exit(1) # Stop the script
 
-    N_INPUTS = CONFIG["nInputs"]
-    N_TARGETS = CONFIG["nTargets"]
+    N_INPUTS = 12
+    N_TARGETS = 4
 
     ## Training set: ID, INPUTS, TARGET_1, TARGET_2, TARGET_3, TARGET_4 (last 4 columns)
     columns = (
