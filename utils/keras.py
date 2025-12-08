@@ -2,6 +2,7 @@ import keras, keras_tuner
 import json
 import os
 import datetime
+from keras.callbacks import EarlyStopping
 
 def load_saved_model(model_path: str):
     """
@@ -69,3 +70,12 @@ def build_results_json(
         result["mse_baseline"] = unwrap(mse_baseline)
 
     return result
+
+def make_early_stopping(mse_baseline):
+    return EarlyStopping(
+        patience=15,
+        mode="min",
+        restore_best_weights=True,
+        baseline=mse_baseline,
+        verbose=1
+    )

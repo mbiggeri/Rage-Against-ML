@@ -6,5 +6,6 @@ from .keras import load_saved_model
 from .keras import save_hyperparameters
 from .keras import dict_to_filename
 from .keras import build_results_json
+from .keras import make_early_stopping
 
 from .optuna import delete_pruned_trial_dirs
