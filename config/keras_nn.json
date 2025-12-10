@@ -1,5 +1,5 @@
 {
-	"batchSize": 32,
+	"batchSize": 64,
 	"inputSize": 12,
 	"outputSize": 4,
 	"scaler": {
