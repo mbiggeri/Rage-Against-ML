@@ -3,7 +3,7 @@ import torch
 import requests
 import sys
 import pandas as pd
-from torch.utils.data import DataLoader, TensorDataset
+from torch.utils.data import DataLoader, TensorDataset, random_split
 from dataloaders import MLCupDataLoader, MLCupDataset
 
 from sklearn.preprocessing import *
@@ -148,3 +148,41 @@ def get_ml_cup_data(batch_size, data_root='./data', test_ratio=0.20, mps=False, 
     test_loader = MLCupDataLoader(dataset=test_dataset, batch_size=batch_size, shuffle=False)
 
     return train_loader, test_loader
+
+def split_dataloader(dataloader, val_fraction=0.2, batch_size=32, seed=42):
+    """
+    Splits a PyTorch dataset into train and validation DataLoaders.
+    
+    Args:
+        dataloader (torch.utils.data.DataLoader): original dataloader
+        val_fraction (float): fraction of samples for the validation set (0 < val_fraction < 1)
+        batch_size (int): batch size for loaders
+        seed (int): random seed for reproducible split
+    
+    Returns:
+        train_loader (DataLoader)
+        val_loader   (DataLoader)
+    """
+    dataset = dataloader.dataset
+    total_samples = len(dataset)
+    n_val = int(total_samples * val_fraction)
+    n_train = total_samples - n_val
+
+    # reproducible split
+    generator = torch.Generator().manual_seed(seed)
+
+    train_subset, val_subset = random_split(dataset, [n_train, n_val], generator=generator)
+
+    train_loader = DataLoader(
+        train_subset,
+        batch_size=batch_size,
+        shuffle=True,
+    )
+
+    val_loader = DataLoader(
+        val_subset,
+        batch_size=batch_size,
+        shuffle=False,
+    )
+
+    return train_loader, val_loader
