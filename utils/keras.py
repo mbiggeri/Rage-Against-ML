@@ -210,12 +210,22 @@ def plot_loss_curve(history, title="Loss over epochs", log_y=False):
     plt.show()
 
 def save_history(history, base_path):
-    hist_dict = history.history
+    if type(history) != dict:
+        hist_dict = history.history
+    else:
+        hist_dict = history
 
-    # Convert numpy types → Python types for JSON
     hist_dict_clean = {k: [float(x) for x in v] for k, v in hist_dict.items()}
 
     with open(base_path + "/history.json", "w") as f:
+        json.dump(hist_dict_clean, f, indent=2)
+
+def save_history_from_dict(history_dict, base_path):
+    """Save a history dict (like KerasRegressor.history_) to JSON."""
+    os.makedirs(base_path, exist_ok=True)
+    # ensure plain Python floats
+    hist_dict_clean = {k: [float(x) for x in v] for k, v in history_dict.items()}
+    with open(os.path.join(base_path, "history.json"), "w") as f:
         json.dump(hist_dict_clean, f, indent=2)
 
 def load_history(base_path):

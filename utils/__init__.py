@@ -13,5 +13,6 @@ from .keras import plot_prediction_error
 from .keras import plot_cv_bar_per_fold
 from .keras import plot_cv_line
 from .keras import save_history
+from .keras import save_history_from_dict
 
 from .optuna import delete_pruned_trial_dirs
