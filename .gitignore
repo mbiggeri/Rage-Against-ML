@@ -17,3 +17,4 @@ outputs/
 .DS_Store
 *.code-workspace
 keras/
+svm_saved_models/
