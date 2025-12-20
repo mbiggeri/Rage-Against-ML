@@ -47,7 +47,7 @@ def dict_to_filename(hyperparams: dict, prefix: str = "sgd_fold") -> str:
     return "_".join(result_parts)
 
 def log_dir(name, kind="fit"):
-    return f"logs/fit/{datetime.datetime.now().strftime("%Y%m%d-%H%M%S")}_{name}"
+    return f"logs/fit/{datetime.datetime.now().strftime('%Y%m%d-%H%M%S')}_{name}"
 
 def build_results_json(
         mee_single, 
