@@ -6,6 +6,10 @@ import pandas as pd
 from torch.utils.data import DataLoader, TensorDataset, random_split
 from dataloaders import MLCupDataLoader, MLCupDataset
 
+import numpy as np
+from copy import deepcopy
+from sklearn.decomposition import PCA
+
 from sklearn.preprocessing import *
 from sklearn.model_selection import train_test_split
 from sklearn.base import TransformerMixin
@@ -186,3 +190,34 @@ def split_dataloader(dataloader, val_fraction=0.2, batch_size=32, seed=42):
     )
 
     return train_loader, val_loader
+
+def cv_fold_split(dataset, train_idx, valid_idx, batch_size):
+    train_data = torch.utils.data.Subset(dataset, train_idx)
+    valid_data = torch.utils.data.Subset(dataset, valid_idx)
+
+    train_loader_cv = torch.utils.data.DataLoader(
+        train_data,
+        batch_size=batch_size,
+        shuffle=True,
+    )
+    valid_loader_cv = torch.utils.data.DataLoader(
+        valid_data,
+        batch_size=batch_size,
+        shuffle=False,
+    )
+    return train_loader_cv, valid_loader_cv
+
+def apply_pca_on_X(dataset, n_components, standardize=True):
+    """
+    Returns a new Dataset with PCA applied to dataset.X
+    """
+    X = np.asarray(dataset.X)
+
+    if standardize:
+        X = StandardScaler().fit_transform(X)
+
+    X_pca = PCA(n_components=n_components).fit_transform(X)
+
+    new_dataset = deepcopy(dataset)
+    new_dataset.X = X_pca
+    return new_dataset

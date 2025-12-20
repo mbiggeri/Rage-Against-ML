@@ -1,6 +1,8 @@
 from .data_loader import get_ml_cup_data
 from .data_loader import get_monk1_data
 from .data_loader import split_dataloader
+from .data_loader import cv_fold_split
+from .data_loader import apply_pca_on_X
 
 from .keras import load_hyperparameters
 from .keras import load_saved_model
@@ -16,3 +18,4 @@ from .keras import save_history
 from .keras import save_history_from_dict
 
 from .optuna import delete_pruned_trial_dirs
+from .optuna import import_csv
