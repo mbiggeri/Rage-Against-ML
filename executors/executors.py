@@ -72,6 +72,8 @@ class OptunaRegressorExecutor:
         n_trials: int = 100,
         sampler: Optional[optuna.samplers.BaseSampler] = None,
         study_prefix: str = "keras-ML-CUP-",
+        baseline: int = None,
+        patience = 20,
         verbose: int = 0,
     ):
         self.train_loader = train_loader
@@ -94,6 +96,8 @@ class OptunaRegressorExecutor:
         self.sampler = sampler
         self.study_prefix = study_prefix
         self.verbose = verbose
+        self.baseline = baseline
+        self.patience = patience
 
     # ----------------------------
     # Utilities
@@ -128,7 +132,7 @@ class OptunaRegressorExecutor:
         path: str,
         train_loader_cv,
         validation_loader_cv,
-    ) -> float:
+    ) -> tuple[float]:
         unit1, unit2 = u
 
         # Suggest hyperparameters (exactly as in your snippet)
@@ -169,8 +173,6 @@ class OptunaRegressorExecutor:
                 output_size=self.train_loader.dataset.y.shape[1]
             )
 
-        pruning_cb = optuna.integration.KerasPruningCallback(trial, "val_loss")
-
         checkpoint_path = f"{path}/checkpoints/optuna_trial_{trial.number}.keras"
         checkpoint_cb = keras.callbacks.ModelCheckpoint(
             filepath=checkpoint_path,
@@ -180,17 +182,20 @@ class OptunaRegressorExecutor:
             save_weights_only=False,
         )
 
+        early_stopping_cb = ukeras.make_early_stopping(self.baseline)
+        early_stopping_cb.patience = self.patience
         # Train model
         history = model.fit(
             train_loader_cv,
             validation_data=validation_loader_cv,
             epochs=self.epochs,
             verbose=self.verbose,
-            callbacks=[pruning_cb, checkpoint_cb],
+            callbacks=[checkpoint_cb, early_stopping_cb],
         )
 
         val_loss = history.history["val_loss"][-1]
-        return float(val_loss)
+        val_mee = history.history["val_mee"][-1]
+        return float(val_loss), float(val_mee)
 
     # ----------------------------
     # Execution
@@ -222,6 +227,7 @@ class OptunaRegressorExecutor:
             def objective_cv(trial: optuna.Trial):
                 fold = KFold(n_splits=self.n_splits, shuffle=True, random_state=self.seed)
                 scores = []
+                mees = []
 
                 # IMPORTANT: same pattern you used: fold.split(range(len(dataset)))
                 for fold_idx, (train_idx, valid_idx) in enumerate(
@@ -236,7 +242,7 @@ class OptunaRegressorExecutor:
                         self.batch_size,
                     )
 
-                    score = self._general_objective(
+                    score, mee = self._general_objective(
                         trial,
                         u_tuple,
                         optuna_unitspecific_path,
@@ -244,7 +250,8 @@ class OptunaRegressorExecutor:
                         validation_loader_cv,
                     )
                     scores.append(score)
-
+                    mees.append(mee)
+                trial.set_user_attr("mee", float(np.mean(mees))) # just to see mee, not to optimize it
                 return float(np.mean(scores))
 
             study = optuna.create_study(
