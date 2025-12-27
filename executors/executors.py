@@ -73,6 +73,7 @@ class OptunaRegressorExecutor:
         study_prefix: str = "keras-ML-CUP-",
         verbose: int = 0,
         baseline: float = None,
+        n_jobs: int = 1,
     ):
         self.train_loader = train_loader
         self.units = units
@@ -95,6 +96,7 @@ class OptunaRegressorExecutor:
         self.study_prefix = study_prefix
         self.verbose = verbose
         self.baseline = baseline
+        self.n_jobs = n_jobs
 
     # ----------------------------
     # Utilities
@@ -234,7 +236,7 @@ class OptunaRegressorExecutor:
                 for fold_idx, (train_idx, valid_idx) in enumerate(
                     fold.split(range(len(reduced_dataset)))
                 ):
-                    print(f"Executing fold {fold_idx}")
+                    print(f"[Trial {trial.number}] Executing fold {fold_idx}")
 
                     train_loader_cv, validation_loader_cv = cv_fold_split(
                         reduced_dataset,
@@ -260,7 +262,7 @@ class OptunaRegressorExecutor:
                 direction="minimize",
             )
 
-            study.optimize(objective_cv, n_trials=self.n_trials)
+            study.optimize(objective_cv, n_trials=self.n_trials, n_jobs=self.n_jobs)
 
             df = study.trials_dataframe()
             optuna_results_path = f"{self.optuna_base_path}/{name}/optuna_results.csv"
