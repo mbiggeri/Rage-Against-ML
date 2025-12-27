@@ -313,18 +313,9 @@ class RandomizedSearchRegressionExecutor:
         if param_distributions is None:
             self.params_init()
         else: 
-            param_distributions["reg__model__pca_input_size"] = [self.pca_input_size]
-            param_distributions["reg__model__seed"] = [self.seed]
-            param_distributions["reg__model__output_size"] = [self.train_loader.dataset.y.shape[1]]
             self.param_distributions = param_distributions
 
     def params_init(self):
-        """
-            Se la RandomizedSearch sceglie sempre la patience più alta e il lambda più piccolo, 
-            significa che il modello ha bisogno di molto tempo per convergere.
-            Se vedi che i modelli con patience bassa hanno score pessimi, considera di alzare 
-            il limite inferiore della tua griglia di ricerca 
-        """
         param_distributions = {
             "reg__model__learning_rate": loguniform(1e-3, 1e-2),
             "reg__model__lambda_1": loguniform(3e-3, 1e-1),
@@ -336,11 +327,6 @@ class RandomizedSearchRegressionExecutor:
             "reg__model__pca_input_size": [self.pca_input_size],
             "reg__model__seed": [self.seed],
             "reg__model__output_size": [self.train_loader.dataset.y.shape[1]],
-            "reg__callbacks": [
-                [keras.callbacks.EarlyStopping(baseline=self.baseline, monitor="val_loss", patience=30, restore_best_weights=True, verbose=1)],
-                [keras.callbacks.EarlyStopping(baseline=self.baseline, monitor="val_loss", patience=90, restore_best_weights=True, verbose=1)],
-                [keras.callbacks.EarlyStopping(baseline=self.baseline, monitor="val_loss", patience=130, restore_best_weights=True, verbose=1)]
-            ]
         }
         print("using default param_distributions", param_distributions)
         self.param_distributions = param_distributions
@@ -354,6 +340,12 @@ class RandomizedSearchRegressionExecutor:
                 verbose=self.verbose,
                 validation_split=self.validation_split,
                 validation_batch_size=80,
+                callbacks=[keras.callbacks.EarlyStopping],
+                callbacks__0__monitor="val_loss",
+                callbacks__0__baseline=self.baseline,
+                callbacks__0__patience=20,
+                callbacks__0__verbose=1,
+                callbacks__0__restore_best_weights=True,
                 loss="mean_squared_error",
                 metrics=[mee]
             )
