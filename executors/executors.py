@@ -47,7 +47,6 @@ class OptunaRegressorExecutor:
       - (optional) PCA reduction on X
       - loop over units configs
       - for each units config: KFold CV
-      - objective trains model with pruning + checkpoint per trial
       - optimize study and save trials dataframe + best hp json
 
     Assumptions / required functions in your project:
@@ -73,6 +72,7 @@ class OptunaRegressorExecutor:
         sampler: Optional[optuna.samplers.BaseSampler] = None,
         study_prefix: str = "keras-ML-CUP-",
         verbose: int = 0,
+        baseline: float = None,
     ):
         self.train_loader = train_loader
         self.units = units
@@ -94,6 +94,7 @@ class OptunaRegressorExecutor:
         self.sampler = sampler
         self.study_prefix = study_prefix
         self.verbose = verbose
+        self.baseline = baseline
 
     # ----------------------------
     # Utilities
@@ -136,6 +137,7 @@ class OptunaRegressorExecutor:
         learning_rate = trial.suggest_float("learning_rate", 1e-3, 1e-2, log=True)
         activation_1 = trial.suggest_categorical("activation_1", ["relu", "gelu", "leaky_relu"])
         dropout_1 = trial.suggest_float("dropout_1", 0.2, 0.5, log=True)
+        meta = {"n_outputs_": self.train_loader.dataset.y.shape[1], "n_features_in_": self.pca_input_size if self.use_pca else self.train_loader.dataset.X.shape[1]}
 
         # Build model
         if unit2 is not None:
@@ -144,6 +146,7 @@ class OptunaRegressorExecutor:
             dropout_2 = trial.suggest_float("dropout_2", 0.2, 0.5, log=True)
 
             model = build_model_two_hidden(
+                meta=meta,
                 unit1=unit1,
                 unit2=unit2,
                 learning_rate=learning_rate,
@@ -153,23 +156,18 @@ class OptunaRegressorExecutor:
                 activation_2=activation_2,
                 dropout_1=dropout_1,
                 dropout_2=dropout_2,
-                pca_input_size=self.pca_input_size,
                 seed=self.seed,
-                output_size=self.train_loader.dataset.y.shape[1]
             )
         else:
             model = build_model_single_hidden(
+                meta=meta,
                 unit1=unit1,
                 learning_rate=learning_rate,
                 lambda_1=lambda_1,
                 activation_1=activation_1,
                 dropout_1=dropout_1,
-                pca_input_size=self.pca_input_size,
                 seed=self.seed,
-                output_size=self.train_loader.dataset.y.shape[1]
             )
-
-        pruning_cb = optuna.integration.KerasPruningCallback(trial, "val_loss")
 
         checkpoint_path = f"{path}/checkpoints/optuna_trial_{trial.number}.keras"
         checkpoint_cb = keras.callbacks.ModelCheckpoint(
@@ -180,13 +178,22 @@ class OptunaRegressorExecutor:
             save_weights_only=False,
         )
 
+        early_stopping_cb = keras.callbacks.EarlyStopping(
+            monitor="val_loss",
+            baseline=self.baseline,
+            patience=50,
+            verbose=1,
+            min_delta=1e-5,
+            restore_best_weights=True,
+        )
+
         # Train model
         history = model.fit(
             train_loader_cv,
             validation_data=validation_loader_cv,
             epochs=self.epochs,
             verbose=self.verbose,
-            callbacks=[pruning_cb, checkpoint_cb],
+            callbacks=[checkpoint_cb, early_stopping_cb],
         )
 
         val_loss = history.history["val_loss"][-1]
@@ -261,7 +268,7 @@ class OptunaRegressorExecutor:
 
             # Your snippet writes hp.json to optuna_base_path (not unitspecific path).
             # Keeping that exact behavior.
-            with open(self.optuna_base_path + "/hp.json", "w+") as f:
+            with open(f"{self.optuna_base_path }/{name}/hp.json", "w+") as f:
                 json.dump(study.best_trial.params, f, indent=2)
 
             print(f"Saved: {optuna_results_path}")
@@ -284,7 +291,6 @@ class RandomizedSearchRegressionExecutor:
             param_distributions: dict[str,]=None,
             use_PCA=False,
             n_iter = 100,
-            pca_input_size: int=None,
             save_path="keras/models/rs",
             pipeline=None
             ):
@@ -292,7 +298,6 @@ class RandomizedSearchRegressionExecutor:
         self.n_iter = n_iter
         self.use_PCA = use_PCA
         self.train_loader = train_loader
-        self.pca_input_size = pca_input_size if pca_input_size is not None else self.train_loader.dataset.X.shape[1]
         self.save_path = save_path
         self.loss = loss
         self.units = units
@@ -317,9 +322,8 @@ class RandomizedSearchRegressionExecutor:
             "reg__model__activation_2": ["relu", "gelu", "leaky_relu"],
             "reg__model__dropout_1": loguniform(0.2, 0.5),
             "reg__model__dropout_2": loguniform(0.2, 0.5),
-            "reg__model__pca_input_size": [self.pca_input_size],
+            "pca__n_components": [2],
             "reg__model__seed": [self.seed],
-            "reg__model__output_size": [self.train_loader.dataset.y.shape[1]],
         }
         print("using default param_distributions", param_distributions)
         self.param_distributions = param_distributions
@@ -336,18 +340,19 @@ class RandomizedSearchRegressionExecutor:
                 callbacks=[keras.callbacks.EarlyStopping],
                 callbacks__0__monitor="val_loss",
                 callbacks__0__baseline=self.baseline,
-                callbacks__0__patience=20,
+                callbacks__0__patience=50,
                 callbacks__0__verbose=1,
+                callbacks__0__min_delta=1e-5,
                 callbacks__0__restore_best_weights=True,
                 loss="mean_squared_error",
                 metrics=[mee]
             )
 
-    def make_pipeline(self, regressor):
+    def make_pipeline(self, regressor, n_components:int=None):
         if self.use_PCA:
             print("using PCA")
             return Pipeline([
-                ("pca", PCA(n_components=self.pca_input_size)),
+                ("pca", PCA(n_components=n_components)),
                 ("reg", regressor)
             ])
         
@@ -371,6 +376,11 @@ class RandomizedSearchRegressionExecutor:
             if type(u) is tuple:
                 unit1, unit2 = u
                 param_distributions_copy["reg__model__unit2"] = [unit2]
+
+            if not self.use_PCA:
+                print("not using PCA, fixing param_distributions")
+                param_distributions_copy.pop("pca__n_components", None)
+                print(f"pca__n_components set to None")
 
             param_distributions_copy["reg__model__unit1"] = [unit1]
             name = str(unit1)
@@ -405,8 +415,12 @@ class RandomizedSearchRegressionExecutor:
             results_df = results_df.rename(columns=lambda x: x.replace('param_', 'params_'))
             results_df.to_csv(f"{save_path_subfolder}/cv_results_df.csv", index=False)
             cleaned_hp = {k.replace('reg__', ''): v for k, v in rs_hp.items()}
+            if self.use_PCA:
+                saved_n_components = cleaned_hp["pca__n_components"]
+                cleaned_hp.pop("pca__n_components", None)
+
             reg.set_params(**cleaned_hp)
-            pipeline = self.make_pipeline(reg)
+            pipeline = self.make_pipeline(reg, n_components=saved_n_components)
             train_dataset = self.train_loader.dataset
             pipeline.fit(
                 X=train_dataset.X,
@@ -417,16 +431,18 @@ class RandomizedSearchRegressionExecutor:
 
 
 def build_model_single_hidden(
+    meta,
     unit1,
-    pca_input_size,
     seed,
-    output_size,
     learning_rate,
     dropout_1,
     lambda_1,
     activation_1
 ):
-    inputs = keras.Input(shape=(pca_input_size,))
+    n_features = meta["n_features_in_"]
+    output_size = meta["n_outputs_"]
+
+    inputs = keras.Input(shape=(n_features,))
     x = inputs
 
     x = keras.layers.Dense(
@@ -460,16 +476,18 @@ def build_model_single_hidden(
     return model
 
 def build_model_two_hidden(
+    meta,
     unit1, unit2,
-    pca_input_size,
     seed,
-    output_size,
     learning_rate,
     dropout_1, dropout_2,
     lambda_1, lambda_2,
     activation_1, activation_2
 ):
-    inputs = keras.Input(shape=(pca_input_size,))
+    n_features = meta["n_features_in_"]
+    output_size = meta["n_outputs_"]
+
+    inputs = keras.Input(shape=(n_features,))
     x = inputs
 
     x = keras.layers.Dense(
