@@ -28,13 +28,13 @@
 
 ## Esempi di script per avviare il programma
 
-python main.py --model standard --dataset monk1 --activation tanh --hidden_sizes 3 --epochs 1000 --batch_size 64 --lr 0.001
+python main.py --dataset monk1 --activation tanh --hidden_sizes 3 --epochs 1000 --batch_size 64 --lr 0.001
 
-python main.py --model standard --dataset ml_cup --activation tanh --hidden_sizes 50 20 --epochs 150 --batch_size 64 --lr 0.001
+python main.py --dataset ml_cup --activation tanh --hidden_sizes 50 20 --epochs 150 --batch_size 64 --lr 0.001
 
-python main.py --model standard --dataset mnist --activation sigmoid --hidden_sizes 256 128 64 --epochs 10 --batch_size 64
+python main.py --dataset mnist --activation sigmoid --hidden_sizes 256 128 64 --epochs 10 --batch_size 64
 
-python main.py --model step_out --dataset mnist --activation sigmoid --hidden_sizes 256 128 64 --epochs 10 --batch_size 64
+python main.py --dataset mnist --activation sigmoid --hidden_sizes 256 128 64 --epochs 10 --batch_size 64
 
 -----
 

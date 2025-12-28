@@ -16,3 +16,7 @@ outputs/
 *.log
 .DS_Store
 *.code-workspace
+keras/
+svm_saved_models/
+batch_logs/
+run_notebook.py

@@ -1,5 +1,32 @@
 {
-	"batchSize": 32,
-	"optimizer": "sgd",
-	"seed": 102953
+	"batchSize": 250,
+	"inputSize": 12,
+	"outputSize": 4,
+	"scaler": {
+		"enabled": true,
+		"type": "Standard"
+	},
+	"seed": 102953,
+	"optuna": {
+		"optimizer": "sgd",
+		"epochs": 100,
+		"suggestions": {
+			"hidden": [
+				{
+					"range": [16, 128],
+					"activation": "relu"
+				},
+				{
+					"range": [16, 128],
+					"activation": "relu"
+				}
+			]
+		},
+		"earlyStopping": {
+			"enabled": true,
+			"patience": 10,
+			"mode": "min",
+			"restoreBestWeight": true
+		}
+	}
 }
