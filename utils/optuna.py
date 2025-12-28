@@ -52,8 +52,15 @@ def import_csv(file_name, target_column="value", direction="minimize"):
     param_cols = [c for c in df.columns if c.startswith('params_')]
     
     for i, row in df.iterrows():
-        # Clean the column names (removing 'params_') for the study
-        params = {c.replace('params_', ''): row[c] for c in param_cols}
+        params = {}
+        for c in param_cols:
+            param = row[c]
+            if pd.isna(param):
+                print(f"skipping empty param {c}")
+                continue
+            # Clean the column names (removing 'params_') for the study
+            params[c.replace('params_', '')] = param
+
         if pd.isna(row[target_column]):
             print(f"skipping row {i} due FAILURE")
             continue
