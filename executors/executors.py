@@ -2,7 +2,7 @@
 import os
 import json
 from typing import Optional, Union
-
+from abc import ABC, abstractmethod
 import numpy as np
 import pandas as pd
 
@@ -18,7 +18,7 @@ import os
 import json
 import pandas as pd
 import utils.keras as ukeras
-from scikeras.wrappers import KerasRegressor, BaseWrapper
+from scikeras.wrappers import KerasRegressor, KerasClassifier
 from sklearn.model_selection import KFold, RandomizedSearchCV
 from sklearn.pipeline import Pipeline
 from sklearn.decomposition import PCA
@@ -276,33 +276,27 @@ class OptunaRegressorExecutor:
             print(f"Saved: {optuna_results_path}")
             print(f"Saved: {self.optuna_base_path + '/hp.json'}")
 
-
-class RandomizedSearchRegressionExecutor:
+class KerasRandomSearchExecutor(ABC):
+    """Classe base astratta (Template Method)"""
     def __init__(
             self,
-            train_loader: DataLoader,
-            loss: str,
-            scoring: str,
-            units: list[tuple[int]] | list[int],
+            train_loader,
+            loss: str = None,
+            scoring: str = None,
+            units: list = None,
             epochs=1500,
             batch_size=80,
             verbose=0,
             validation_split=.20,
-            baseline: float=None,
+            baseline: float = None,
             seed=42,
-            param_distributions: dict[str,]=None,
+            param_distributions: dict = None,
             use_PCA=False,
-            n_iter = 100,
+            n_iter=100,
             save_path="keras/models/rs",
-            pipeline=None,
-            n_jobs = 1,
+            n_jobs=1,
             ):
-        self.scoring = scoring
-        self.n_iter = n_iter
-        self.use_PCA = use_PCA
         self.train_loader = train_loader
-        self.save_path = save_path
-        self.loss = loss
         self.units = units
         self.epochs = epochs
         self.batch_size = batch_size
@@ -310,15 +304,36 @@ class RandomizedSearchRegressionExecutor:
         self.validation_split = validation_split
         self.baseline = baseline
         self.seed = seed
-        self.pipeline = pipeline
+        self.use_PCA = use_PCA
+        self.n_iter = n_iter
+        self.save_path = save_path
+        self.n_jobs = n_jobs
+        
+        # Se non passati, usa i default definiti nelle sottoclassi
+        self.loss = loss or self._get_default_loss()
+        self.scoring = scoring or self._get_default_scoring()
+
         if param_distributions is None:
-            self.params_init()
+            self._params_init()
         else: 
             self.param_distributions = param_distributions
-        self.n_jobs = n_jobs
 
-    def params_init(self):
-        param_distributions = {
+    @abstractmethod
+    def _get_wrapper_class(self):
+        """Ritorna KerasRegressor o KerasClassifier"""
+        pass
+
+    @abstractmethod
+    def _get_default_loss(self): pass
+
+    @abstractmethod
+    def _get_default_scoring(self): pass
+
+    @abstractmethod
+    def _get_default_metrics(self): pass
+
+    def _params_init(self):
+        self.param_distributions = {
             "reg__model__learning_rate": loguniform(1e-3, 1e-2),
             "reg__model__lambda_1": loguniform(3e-3, 1e-1),
             "reg__model__lambda_2": loguniform(3e-3, 1e-1),
@@ -329,111 +344,123 @@ class RandomizedSearchRegressionExecutor:
             "pca__n_components": [2],
             "reg__model__seed": [self.seed],
         }
-        print("using default param_distributions", param_distributions)
-        self.param_distributions = param_distributions
 
-    def keras_regressor(self, unit2):
+    def _create_keras_wrapper(self, unit2):
+        # LOGICA FISSA: Scelta della build function basata sulla presenza di unit2
         build_fn = build_model_two_hidden if unit2 is not None else build_model_single_hidden
-        return KerasRegressor(
-                model=build_fn,
-                epochs=self.epochs,
-                batch_size=self.batch_size,
-                verbose=self.verbose,
-                validation_split=self.validation_split,
-                validation_batch_size=80,
-                callbacks=[keras.callbacks.EarlyStopping],
-                callbacks__0__monitor="val_loss",
-                callbacks__0__baseline=self.baseline,
-                callbacks__0__patience=50,
-                callbacks__0__verbose=1,
-                callbacks__0__min_delta=1e-5,
-                callbacks__0__restore_best_weights=True,
-                loss="mean_squared_error",
-                metrics=[mee]
-            )
+        
+        wrapper_class = self._get_wrapper_class()
+        return wrapper_class(
+            model=build_fn,
+            epochs=self.epochs,
+            batch_size=self.batch_size,
+            verbose=self.verbose,
+            validation_split=self.validation_split,
+            validation_batch_size=80,
+            callbacks=[keras.callbacks.EarlyStopping],
+            callbacks__0__monitor="val_loss",
+            callbacks__0__baseline=self.baseline,
+            callbacks__0__patience=50,
+            callbacks__0__verbose=1,
+            callbacks__0__min_delta=1e-5,
+            callbacks__0__restore_best_weights=True,
+            loss=self.loss,
+            metrics=self._get_default_metrics()
+        )
 
-    def make_pipeline(self, regressor, n_components:int=None):
+    def _make_pipeline(self, regressor, n_components=None):
         if self.use_PCA:
-            print("using PCA")
             return Pipeline([
                 ("pca", PCA(n_components=n_components)),
                 ("reg", regressor)
             ])
-        
-        print("not using PCA")
-        return Pipeline([
-                ("reg", regressor)
-            ])
+        return Pipeline([("reg", regressor)])
 
     def execute(self):
+        """Il Template Method che orchestra l'esecuzione"""
         for u in self.units:
-            print(f"===unit {u}===")
+            print(f"=== unit {u} ===")
             
-            ## randomized search
-            param_distributions_copy = dict(self.param_distributions)
-            if type(u) is int:
+            param_dist = dict(self.param_distributions)
+            
+            if isinstance(u, int):
                 unit1, unit2 = u, None
-                param_distributions_copy.pop("reg__model__dropout_2", None)
-                param_distributions_copy.pop("reg__model__activation_2", None)
-                param_distributions_copy.pop("reg__model__lambda_2", None)
-            
-            if type(u) is tuple:
+                for k in ["reg__model__dropout_2", "reg__model__activation_2", "reg__model__lambda_2"]:
+                    param_dist.pop(k, None)
+            else:
                 unit1, unit2 = u
-                param_distributions_copy["reg__model__unit2"] = [unit2]
+                param_dist["reg__model__unit2"] = [unit2]
 
+            param_dist["reg__model__unit1"] = [unit1]
             if not self.use_PCA:
-                print("not using PCA, fixing param_distributions")
-                param_distributions_copy.pop("pca__n_components", None)
-                print(f"pca__n_components set to None")
+                param_dist.pop("pca__n_components", None)
 
-            param_distributions_copy["reg__model__unit1"] = [unit1]
-            name = str(unit1)
-            if unit2 is not None:
-                name += "x" + str(unit2)
-            save_path_subfolder = f"{self.save_path}/{name}"
-            k = 5
-            cv = KFold(n_splits=k, shuffle=True, random_state=self.seed)
+            name = str(unit1) + (f"x{unit2}" if unit2 else "")
+            save_path_subfolder = os.path.join(self.save_path, name)
+            
+            cv = KFold(n_splits=5, shuffle=True, random_state=self.seed)
+            reg = self._create_keras_wrapper(unit2)
+            pipeline = self._make_pipeline(reg)
 
-            reg = self.keras_regressor(unit2)
-            pipeline = self.make_pipeline(reg)
-            self.pipeline = pipeline
-            print(param_distributions_copy)
             random_search = RandomizedSearchCV(
                 estimator=pipeline,
-                param_distributions=param_distributions_copy,
+                param_distributions=param_dist,
                 n_iter=self.n_iter,
                 cv=cv,
                 scoring=self.scoring,
-                verbose=0,
-                random_state=self.seed,
                 n_jobs=self.n_jobs,
+                random_state=self.seed,
             )
+            
             random_search.fit(self.train_loader.dataset.X, self.train_loader.dataset.y)
-            rs_hp = random_search.best_params_
-            print("Best CV MEE (negative):", random_search.best_score_)
+            
+            # Salvataggio
             os.makedirs(save_path_subfolder, exist_ok=True)
-            with open(save_path_subfolder + "/hp.json", "w") as f:
+            with open(f"{save_path_subfolder}/hp.json", "w") as f:
                 json.dump(random_search.best_params_, f, indent=2)
-                print("random_search hp saved")
 
             results_df = pd.DataFrame(random_search.cv_results_)
-            results_df = results_df.rename(columns=lambda x: x.replace('param_', 'params_'))
+            results_df.columns = [c.replace('param_', 'params_') for c in results_df.columns]
             results_df.to_csv(f"{save_path_subfolder}/cv_results_df.csv", index=False)
-            cleaned_hp = {k.replace('reg__', ''): v for k, v in rs_hp.items()}
-            if self.use_PCA:
-                saved_n_components = cleaned_hp["pca__n_components"]
-                cleaned_hp.pop("pca__n_components", None)
 
+            # Re-fit finale del miglior modello
+            best_params = random_search.best_params_
+            cleaned_hp = {k.replace('reg__', ''): v for k, v in best_params.items() if 'reg__' in k}
+            
+            n_comp = best_params.get("pca__n_components", None)
             reg.set_params(**cleaned_hp)
-            pipeline = self.make_pipeline(reg, n_components=saved_n_components)
-            train_dataset = self.train_loader.dataset
-            pipeline.fit(
-                X=train_dataset.X,
-                y=train_dataset.y,
-            )
-            reg.model_.save(save_path_subfolder+"/model.keras")
-            ukeras.save_history_from_dict(reg.history_, save_path_subfolder)
+            
+            final_pipeline = self._make_pipeline(reg, n_components=n_comp)
+            final_pipeline.fit(self.train_loader.dataset.X, self.train_loader.dataset.y)
+            
+            reg.model_.save(f"{save_path_subfolder}/model.keras")
 
+# --- SOTTOCLASSI CONCRETE ---
+class RandomizedSearchRegressionExecutor(KerasRandomSearchExecutor):
+    def _get_wrapper_class(self):
+        return KerasRegressor
+
+    def _get_default_loss(self):
+        return "mean_squared_error"
+
+    def _get_default_scoring(self):
+        return "neg_mean_squared_error"
+
+    def _get_default_metrics(self):
+        return [mee]
+
+class RandomizedSearchClassificationExecutor(KerasRandomSearchExecutor):
+    def _get_wrapper_class(self):
+        return KerasClassifier
+
+    def _get_default_loss(self):
+        return "sparse_categorical_crossentropy"
+
+    def _get_default_scoring(self):
+        return "accuracy"
+
+    def _get_default_metrics(self):
+        return ["accuracy"]
 
 def build_model_single_hidden(
     meta,
