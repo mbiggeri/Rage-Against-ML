@@ -294,7 +294,8 @@ class RandomizedSearchRegressionExecutor:
             use_PCA=False,
             n_iter = 100,
             save_path="keras/models/rs",
-            pipeline=None
+            pipeline=None,
+            n_jobs = 1,
             ):
         self.scoring = scoring
         self.n_iter = n_iter
@@ -314,6 +315,7 @@ class RandomizedSearchRegressionExecutor:
             self.params_init()
         else: 
             self.param_distributions = param_distributions
+        self.n_jobs = n_jobs
 
     def params_init(self):
         param_distributions = {
@@ -404,6 +406,7 @@ class RandomizedSearchRegressionExecutor:
                 scoring=self.scoring,
                 verbose=0,
                 random_state=self.seed,
+                n_jobs=self.n_jobs,
             )
             random_search.fit(self.train_loader.dataset.X, self.train_loader.dataset.y)
             rs_hp = random_search.best_params_
