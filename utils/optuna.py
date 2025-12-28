@@ -43,7 +43,7 @@ def import_csv(file_name, target_column="value", direction="minimize"):
     """
     # 1. Load the data
     df = pd.read_csv(file_name)
-    
+
     # 2. Create a new study in-memory
     study = optuna.create_study(direction=direction)
     
@@ -51,9 +51,12 @@ def import_csv(file_name, target_column="value", direction="minimize"):
     # This filters for columns that start with 'params_'
     param_cols = [c for c in df.columns if c.startswith('params_')]
     
-    for _, row in df.iterrows():
+    for i, row in df.iterrows():
         # Clean the column names (removing 'params_') for the study
         params = {c.replace('params_', ''): row[c] for c in param_cols}
+        if pd.isna(row[target_column]):
+            print(f"skipping row {i} due FAILURE")
+            continue
         
         distributions = {}
         for name, val in params.items():
