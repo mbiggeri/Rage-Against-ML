@@ -11,11 +11,13 @@ from .keras import dict_to_filename
 from .keras import build_results_json
 from .keras import make_early_stopping
 from .keras import assessment
-from .keras import plot_prediction_error
-from .keras import plot_cv_bar_per_fold
-from .keras import plot_cv_line
 from .keras import save_history
 from .keras import save_history_from_dict
 
 from .optuna import delete_pruned_trial_dirs
 from .optuna import import_csv
+
+from .plot import plot_prediction_error
+from .plot import plot_cv_bar_per_fold
+from .plot import plot_cv_line
+from .plot import plot_optuna_vs_random
