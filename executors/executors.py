@@ -41,7 +41,7 @@ if keras.backend.backend() != "torch":
 
 UnitsType = Union[list[tuple[int, int]], list[int]]
 
-class OptunaRegressorExecutor:
+class OptunaExecutor(ABC):
     """
     Optuna-based hyperparameter search executor for Keras regression models.
 
@@ -62,6 +62,7 @@ class OptunaRegressorExecutor:
         self,
         train_loader,
         units: UnitsType,
+        loss: str,
         optuna_base_path: str = "keras/models/optuna",
         pca_input_size: Optional[int] = None,
         use_pca: bool = False,
@@ -76,6 +77,7 @@ class OptunaRegressorExecutor:
         verbose: int = 0,
         baseline: float = None,
         n_jobs: int = 1,
+        default_metrics: list[str] | list[object] = None
     ):
         self.train_loader = train_loader
         self.units = units
@@ -99,6 +101,8 @@ class OptunaRegressorExecutor:
         self.verbose = verbose
         self.baseline = baseline
         self.n_jobs = n_jobs
+        self.default_metrics = default_metrics
+        self.loss = loss
 
     # ----------------------------
     # Utilities
@@ -122,6 +126,34 @@ class OptunaRegressorExecutor:
         os.makedirs(base, exist_ok=True)
         os.makedirs(os.path.join(base, "checkpoints"), exist_ok=True)
 
+    @abstractmethod
+    def _build_model_two_hidden(self, meta, unit1, unit2, learning_rate, lambda_1, lambda_2, 
+                                activation_1, activation_2, dropout_1, dropout_2): pass
+
+    @abstractmethod
+    def _build_model_single_hidden(self, meta, unit1, learning_rate, lambda_1, activation_1, dropout_1): pass
+
+    @abstractmethod
+    def _get_early_stopping_monitor(self): pass
+
+    @abstractmethod
+    def _get_checkpoint_monitor(self): pass
+
+    @abstractmethod
+    def _get_checkpoint_mode(self): pass
+
+    @abstractmethod
+    def _get_default_val_loss(self): pass
+
+    @abstractmethod
+    def _get_n_outputs(self): pass
+
+    @abstractmethod
+    def _get_direction(self): pass
+
+    @abstractmethod
+    def _get_default_metrics(self): pass
+
     # ----------------------------
     # Objective pieces
     # ----------------------------
@@ -141,7 +173,8 @@ class OptunaRegressorExecutor:
         learning_rate = trial.suggest_float("learning_rate", 1e-3, 1e-2, log=True)
         activation_1 = trial.suggest_categorical("activation_1", ["relu", "gelu", "leaky_relu"])
         dropout_1 = trial.suggest_float("dropout_1", 0.2, 0.5, log=True)
-        meta = {"n_outputs_": self.train_loader.dataset.y.shape[1], "n_features_in_": self.pca_input_size if self.use_pca else self.train_loader.dataset.X.shape[1]}
+        meta = {"n_outputs_": self._get_n_outputs(), 
+                "n_features_in_": self.pca_input_size if self.use_pca else self.train_loader.dataset.X.shape[1]}
 
         # Build model
         if unit2 is not None:
@@ -149,7 +182,7 @@ class OptunaRegressorExecutor:
             activation_2 = trial.suggest_categorical("activation_2", ["relu", "gelu", "leaky_relu"])
             dropout_2 = trial.suggest_float("dropout_2", 0.2, 0.5, log=True)
 
-            model = build_model_two_hidden(
+            model = self._build_model_two_hidden(
                 meta=meta,
                 unit1=unit1,
                 unit2=unit2,
@@ -159,31 +192,29 @@ class OptunaRegressorExecutor:
                 activation_1=activation_1,
                 activation_2=activation_2,
                 dropout_1=dropout_1,
-                dropout_2=dropout_2,
-                seed=self.seed,
+                dropout_2=dropout_2
             )
         else:
-            model = build_model_single_hidden(
+            model = self._build_model_single_hidden(
                 meta=meta,
                 unit1=unit1,
                 learning_rate=learning_rate,
                 lambda_1=lambda_1,
                 activation_1=activation_1,
-                dropout_1=dropout_1,
-                seed=self.seed,
+                dropout_1=dropout_1
             )
 
         checkpoint_path = f"{path}/checkpoints/optuna_trial_{trial.number}.keras"
         checkpoint_cb = keras.callbacks.ModelCheckpoint(
             filepath=checkpoint_path,
-            monitor="val_loss",
-            mode="min",
+            monitor=self._get_checkpoint_monitor(),
+            mode=self._get_checkpoint_mode(),
             save_best_only=True,
             save_weights_only=False,
         )
 
         early_stopping_cb = keras.callbacks.EarlyStopping(
-            monitor="val_loss",
+            monitor=self._get_early_stopping_monitor(),
             baseline=self.baseline,
             patience=50,
             verbose=1,
@@ -200,7 +231,7 @@ class OptunaRegressorExecutor:
             callbacks=[checkpoint_cb, early_stopping_cb],
         )
 
-        val_loss = history.history["val_loss"][-1]
+        val_loss = history.history[self._get_default_val_loss()][-1]
         return float(val_loss)
 
     # ----------------------------
@@ -261,7 +292,7 @@ class OptunaRegressorExecutor:
             study = optuna.create_study(
                 study_name=self.study_prefix + name,
                 sampler=self.sampler,
-                direction="minimize",
+                direction=self._get_direction(),
             )
 
             study.optimize(objective_cv, n_trials=self.n_trials, n_jobs=self.n_jobs)
@@ -277,6 +308,114 @@ class OptunaRegressorExecutor:
 
             print(f"Saved: {optuna_results_path}")
             print(f"Saved: {self.optuna_base_path + '/hp.json'}")
+
+class OptunaRegressorExecutor(OptunaExecutor):
+    def _get_checkpoint_mode(self):
+        return "min"
+
+    def _build_model_two_hidden(self, meta, unit1, unit2, learning_rate, lambda_1, lambda_2, 
+                                activation_1, activation_2, dropout_1, dropout_2):
+        n_features = meta["n_features_in_"]
+        output_size = meta["n_outputs_"]
+
+        inputs = keras.Input(shape=(n_features,))
+        x = inputs
+
+        x = keras.layers.Dense(
+                unit1,
+                activation=activation_1,
+                kernel_regularizer=keras.regularizers.l2(lambda_1),
+                kernel_initializer=keras.initializers.GlorotNormal(seed=self.seed)
+            )(x)
+        
+        x = keras.layers.Dropout(
+            rate=dropout_1
+        )(x)
+        
+        x = keras.layers.Dense(
+                unit2,
+                activation=activation_2,
+                kernel_regularizer=keras.regularizers.l2(lambda_2),
+                kernel_initializer=keras.initializers.GlorotNormal(seed=self.seed+1)
+            )(x)
+
+        x = keras.layers.Dropout(
+            rate=dropout_2
+        )(x)
+
+        # Output layer
+        outputs = keras.layers.Dense(output_size)(x)
+
+        model = keras.Model(inputs, outputs)
+
+        optimizer = keras.optimizers.SGD(
+            learning_rate=learning_rate,
+            momentum=0.9,
+            nesterov=True,
+        )
+
+        model.compile(
+            optimizer=optimizer,
+            loss=self.loss,
+            metrics=self.default_metrics,
+        )
+
+        return model
+
+    def _build_model_single_hidden(self, meta, unit1, learning_rate, lambda_1, activation_1, dropout_1):
+        n_features = meta["n_features_in_"]
+        output_size = meta["n_outputs_"]
+
+        inputs = keras.Input(shape=(n_features,))
+        x = inputs
+
+        x = keras.layers.Dense(
+                unit1,
+                activation=activation_1,
+                kernel_regularizer=keras.regularizers.l2(lambda_1),
+                kernel_initializer=keras.initializers.GlorotNormal(seed=self.seed)
+            )(x)
+        
+        x = keras.layers.Dropout(
+            rate=dropout_1
+        )(x)
+        
+        # Output layer
+        outputs = keras.layers.Dense(output_size)(x)
+
+        model = keras.Model(inputs, outputs)
+
+        optimizer = keras.optimizers.SGD(
+            learning_rate=learning_rate,
+            momentum=0.9,
+            nesterov=True,
+        )
+
+        model.compile(
+            optimizer=optimizer,
+            loss=self.loss,
+            metrics=self.default_metrics,
+        )
+
+        return model
+
+    def _get_early_stopping_monitor(self):
+        return "val_loss"
+    
+    def _get_default_metrics(self):
+        return [mee]
+
+    def _get_checkpoint_monitor(self):
+        return "val_loss"
+
+    def _get_default_val_loss(self):
+        return "val_loss"
+
+    def _get_n_outputs(self):
+        return self.train_loader.dataset.y.shape[1]
+
+    def _get_direction(self):
+        return "minimize"
 
 class KerasRandomSearchExecutor(ABC):
     """Classe base astratta (Template Method)"""
@@ -346,6 +485,9 @@ class KerasRandomSearchExecutor(ABC):
     @abstractmethod
     def _build_model_single_hidden(self): pass
 
+    @abstractmethod
+    def _get_early_stopping_monitor(self): pass
+
     def _create_keras_wrapper(self, unit2):
         # LOGICA FISSA: Scelta della build function basata sulla presenza di unit2
         build_fn = self._build_model_two_hidden() if unit2 is not None else self._build_model_single_hidden()
@@ -359,7 +501,7 @@ class KerasRandomSearchExecutor(ABC):
             validation_split=self.validation_split,
             validation_batch_size=80,
             callbacks=[keras.callbacks.EarlyStopping],
-            callbacks__0__monitor="val_loss",
+            callbacks__0__monitor=self._get_early_stopping_monitor(),
             callbacks__0__baseline=self.baseline,
             callbacks__0__patience=50,
             callbacks__0__verbose=1,
@@ -476,6 +618,9 @@ class RandomizedSearchRegressionExecutor(KerasRandomSearchExecutor):
     def _get_default_metrics(self):
         return [mee]
     
+    def _get_early_stopping_monitor(self):
+        return "val_loss"
+    
     def _build_model_single_hidden(
         self
     ):
@@ -579,6 +724,9 @@ class RandomizedSearchClassificationExecutor(KerasRandomSearchExecutor):
     def _get_default_scoring(self):
         return "accuracy"
     
+    def _get_early_stopping_monitor(self):
+        return "val_accuracy"
+
     def _get_params_prefix(self):
         return "wrapper__classifier__model"
     
