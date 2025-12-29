@@ -340,9 +340,15 @@ class KerasRandomSearchExecutor(ABC):
     @abstractmethod
     def _params_init(self): pass
 
+    @abstractmethod
+    def _build_model_two_hidden(self): pass
+
+    @abstractmethod
+    def _build_model_single_hidden(self): pass
+
     def _create_keras_wrapper(self, unit2):
         # LOGICA FISSA: Scelta della build function basata sulla presenza di unit2
-        build_fn = build_model_two_hidden if unit2 is not None else build_model_single_hidden
+        build_fn = self._build_model_two_hidden() if unit2 is not None else self._build_model_single_hidden()
         
         wrapper_class = self._get_wrapper_class()
         keras_wrapper = wrapper_class(
@@ -469,6 +475,99 @@ class RandomizedSearchRegressionExecutor(KerasRandomSearchExecutor):
 
     def _get_default_metrics(self):
         return [mee]
+    
+    def _build_model_single_hidden(
+        self
+    ):
+        def f(meta, unit1, seed, learning_rate, dropout_1, lambda_1, activation_1):
+            n_features = meta["n_features_in_"]
+            output_size = meta["n_outputs_"]
+
+            inputs = keras.Input(shape=(n_features,))
+            x = inputs
+
+            x = keras.layers.Dense(
+                    unit1,
+                    activation=activation_1,
+                    kernel_regularizer=keras.regularizers.l2(lambda_1),
+                    kernel_initializer=keras.initializers.GlorotNormal(seed=seed)
+                )(x)
+            
+            x = keras.layers.Dropout(
+                rate=dropout_1
+            )(x)
+            
+            # Output layer
+            outputs = keras.layers.Dense(output_size)(x)
+
+            model = keras.Model(inputs, outputs)
+
+            optimizer = keras.optimizers.SGD(
+                learning_rate=learning_rate,
+                momentum=0.9,
+                nesterov=True,
+            )
+
+            model.compile(
+                optimizer=optimizer,
+                loss=self.loss,
+                metrics=self._get_default_metrics(),
+            )
+
+            return model
+        return f
+
+    def _build_model_two_hidden(
+        self
+    ):
+        def f(meta, unit1, unit2, seed, learning_rate, dropout_1, dropout_2, lambda_1, lambda_2, activation_1, activation_2):
+            n_features = meta["n_features_in_"]
+            output_size = meta["n_outputs_"]
+
+            inputs = keras.Input(shape=(n_features,))
+            x = inputs
+
+            x = keras.layers.Dense(
+                    unit1,
+                    activation=activation_1,
+                    kernel_regularizer=keras.regularizers.l2(lambda_1),
+                    kernel_initializer=keras.initializers.GlorotNormal(seed=seed)
+                )(x)
+            
+            x = keras.layers.Dropout(
+                rate=dropout_1
+            )(x)
+            
+            x = keras.layers.Dense(
+                    unit2,
+                    activation=activation_2,
+                    kernel_regularizer=keras.regularizers.l2(lambda_2),
+                    kernel_initializer=keras.initializers.GlorotNormal(seed=seed+1)
+                )(x)
+
+            x = keras.layers.Dropout(
+                rate=dropout_2
+            )(x)
+
+            # Output layer
+            outputs = keras.layers.Dense(output_size)(x)
+
+            model = keras.Model(inputs, outputs)
+
+            optimizer = keras.optimizers.SGD(
+                learning_rate=learning_rate,
+                momentum=0.9,
+                nesterov=True,
+            )
+
+            model.compile(
+                optimizer=optimizer,
+                loss=self.loss,
+                metrics=self._get_default_metrics(),
+            )
+
+            return model
+        return f
 
 class RandomizedSearchClassificationExecutor(KerasRandomSearchExecutor):
     def _get_wrapper_class(self):
@@ -495,103 +594,96 @@ class RandomizedSearchClassificationExecutor(KerasRandomSearchExecutor):
     def _get_default_metrics(self):
         return ["accuracy"]
 
-def build_model_single_hidden(
-    meta,
-    unit1,
-    seed,
-    learning_rate,
-    dropout_1,
-    lambda_1,
-    activation_1
-):
-    n_features = meta["n_features_in_"]
-    output_size = meta["n_outputs_"]
-
-    inputs = keras.Input(shape=(n_features,))
-    x = inputs
-
-    x = keras.layers.Dense(
-            unit1,
-            activation=activation_1,
-            kernel_regularizer=keras.regularizers.l2(lambda_1),
-            kernel_initializer=keras.initializers.GlorotNormal(seed=seed)
-        )(x)
     
-    x = keras.layers.Dropout(
-        rate=dropout_1
-    )(x)
-    
-    # Output layer
-    outputs = keras.layers.Dense(output_size)(x)
+    def _build_model_single_hidden(
+        self
+    ):
+        def f(meta, unit1, seed, learning_rate, dropout_1, lambda_1, activation_1):
+            n_features = meta["n_features_in_"]
+            output_size = meta["n_outputs_"]
 
-    model = keras.Model(inputs, outputs)
+            inputs = keras.Input(shape=(n_features,))
+            x = inputs
 
-    optimizer = keras.optimizers.SGD(
-        learning_rate=learning_rate,
-        momentum=0.9,
-        nesterov=True,
-    )
+            x = keras.layers.Dense(
+                    unit1,
+                    activation=activation_1,
+                    kernel_regularizer=keras.regularizers.l2(lambda_1),
+                    kernel_initializer=keras.initializers.GlorotNormal(seed=seed)
+                )(x)
+            
+            x = keras.layers.Dropout(
+                rate=dropout_1
+            )(x)
+            
+            # Output layer
+            outputs = keras.layers.Dense(output_size)(x)
 
-    model.compile(
-        optimizer=optimizer,
-        loss="mse",
-        metrics=[mee],
-    )
+            model = keras.Model(inputs, outputs)
 
-    return model
+            optimizer = keras.optimizers.SGD(
+                learning_rate=learning_rate,
+                momentum=0.9,
+                nesterov=True,
+            )
 
-def build_model_two_hidden(
-    meta,
-    unit1, unit2,
-    seed,
-    learning_rate,
-    dropout_1, dropout_2,
-    lambda_1, lambda_2,
-    activation_1, activation_2
-):
-    n_features = meta["n_features_in_"]
-    output_size = meta["n_outputs_"]
+            model.compile(
+                optimizer=optimizer,
+                loss=self.loss,
+                metrics=self._get_default_metrics(),
+            )
 
-    inputs = keras.Input(shape=(n_features,))
-    x = inputs
+            return model
+        return f
 
-    x = keras.layers.Dense(
-            unit1,
-            activation=activation_1,
-            kernel_regularizer=keras.regularizers.l2(lambda_1),
-            kernel_initializer=keras.initializers.GlorotNormal(seed=seed)
-        )(x)
-    
-    x = keras.layers.Dropout(
-        rate=dropout_1
-    )(x)
-    
-    x = keras.layers.Dense(
-            unit2,
-            activation=activation_2,
-            kernel_regularizer=keras.regularizers.l2(lambda_2),
-            kernel_initializer=keras.initializers.GlorotNormal(seed=seed+1)
-        )(x)
+    def _build_model_two_hidden(
+        self
+    ):
+        def f(meta, unit1, unit2, seed, learning_rate, dropout_1, dropout_2, lambda_1, lambda_2, activation_1, activation_2):
+            n_features = meta["n_features_in_"]
+            output_size = meta["n_outputs_"]
 
-    x = keras.layers.Dropout(
-        rate=dropout_2
-    )(x)
+            inputs = keras.Input(shape=(n_features,))
+            x = inputs
 
-    # Output layer
-    outputs = keras.layers.Dense(output_size)(x)
+            x = keras.layers.Dense(
+                    unit1,
+                    activation=activation_1,
+                    kernel_regularizer=keras.regularizers.l2(lambda_1),
+                    kernel_initializer=keras.initializers.GlorotNormal(seed=seed)
+                )(x)
+            
+            x = keras.layers.Dropout(
+                rate=dropout_1
+            )(x)
+            
+            x = keras.layers.Dense(
+                    unit2,
+                    activation=activation_2,
+                    kernel_regularizer=keras.regularizers.l2(lambda_2),
+                    kernel_initializer=keras.initializers.GlorotNormal(seed=seed+1)
+                )(x)
 
-    model = keras.Model(inputs, outputs)
+            x = keras.layers.Dropout(
+                rate=dropout_2
+            )(x)
 
-    optimizer = keras.optimizers.SGD(
-        learning_rate=learning_rate,
-        momentum=0.9,
-        nesterov=True,
-    )
+            # Output layer
+            outputs = keras.layers.Dense(output_size)(x)
 
-    model.compile(
-        optimizer=optimizer,
-        loss="mse",
-        metrics=[mee],
-    )
+            model = keras.Model(inputs, outputs)
 
-    return model
+            optimizer = keras.optimizers.SGD(
+                learning_rate=learning_rate,
+                momentum=0.9,
+                nesterov=True,
+            )
+
+            model.compile(
+                optimizer=optimizer,
+                loss=self.loss,
+                metrics=self._get_default_metrics(),
+            )
+
+            return model
+        return f
