@@ -21,6 +21,8 @@ import utils.keras as ukeras
 from scikeras.wrappers import KerasRegressor, KerasClassifier
 from sklearn.model_selection import KFold, RandomizedSearchCV
 from sklearn.pipeline import Pipeline
+from sklearn.compose import TransformedTargetRegressor
+from sklearn.preprocessing import StandardScaler
 from sklearn.decomposition import PCA
 from scipy.stats import loguniform
 from losses import MeanEuclidianError
@@ -332,17 +334,20 @@ class KerasRandomSearchExecutor(ABC):
     @abstractmethod
     def _get_default_metrics(self): pass
 
+    @abstractmethod
+    def _get_params_prefix(self): pass
+
     def _params_init(self):
         self.param_distributions = {
-            "reg__model__learning_rate": loguniform(1e-3, 1e-2),
-            "reg__model__lambda_1": loguniform(3e-3, 1e-1),
-            "reg__model__lambda_2": loguniform(3e-3, 1e-1),
-            "reg__model__activation_1": ["relu", "gelu", "leaky_relu"],
-            "reg__model__activation_2": ["relu", "gelu", "leaky_relu"],
-            "reg__model__dropout_1": loguniform(0.2, 0.5),
-            "reg__model__dropout_2": loguniform(0.2, 0.5),
+            f"{self._get_params_prefix()}__learning_rate": loguniform(1e-3, 1e-2),
+            f"{self._get_params_prefix()}__lambda_1": loguniform(3e-3, 1e-1),
+            f"{self._get_params_prefix()}__lambda_2": loguniform(3e-3, 1e-1),
+            f"{self._get_params_prefix()}__activation_1": ["relu", "gelu", "leaky_relu"],
+            f"{self._get_params_prefix()}__activation_2": ["relu", "gelu", "leaky_relu"],
+            f"{self._get_params_prefix()}__dropout_1": loguniform(0.2, 0.5),
+            f"{self._get_params_prefix()}__dropout_2": loguniform(0.2, 0.5),
             "pca__n_components": [2],
-            "reg__model__seed": [self.seed],
+            f"{self._get_params_prefix()}__seed": [self.seed],
         }
 
     def _create_keras_wrapper(self, unit2):
@@ -350,7 +355,7 @@ class KerasRandomSearchExecutor(ABC):
         build_fn = build_model_two_hidden if unit2 is not None else build_model_single_hidden
         
         wrapper_class = self._get_wrapper_class()
-        return wrapper_class(
+        keras_wrapper = wrapper_class(
             model=build_fn,
             epochs=self.epochs,
             batch_size=self.batch_size,
@@ -367,14 +372,19 @@ class KerasRandomSearchExecutor(ABC):
             loss=self.loss,
             metrics=self._get_default_metrics()
         )
+        if isinstance(wrapper_class, KerasClassifier):
+            return keras_wrapper
 
-    def _make_pipeline(self, regressor, n_components=None):
+        print("wrapping KerasRegressor with TransformedTargetRegressor using StandardScaler")
+        return TransformedTargetRegressor(regressor=keras_wrapper, transformer=StandardScaler())
+
+    def _make_pipeline(self, wrapper, n_components=None):
         if self.use_PCA:
             return Pipeline([
                 ("pca", PCA(n_components=n_components)),
-                ("reg", regressor)
+                ("wrapper", wrapper)
             ])
-        return Pipeline([("reg", regressor)])
+        return Pipeline([("wrapper", wrapper)])
 
     def execute(self):
         """Il Template Method che orchestra l'esecuzione"""
@@ -385,13 +395,15 @@ class KerasRandomSearchExecutor(ABC):
             
             if isinstance(u, int):
                 unit1, unit2 = u, None
-                for k in ["reg__model__dropout_2", "reg__model__activation_2", "reg__model__lambda_2"]:
+                for k in [f"{self._get_params_prefix()}__dropout_2", 
+                          f"{self._get_params_prefix()}__activation_2", 
+                          f"{self._get_params_prefix()}__lambda_2"]:
                     param_dist.pop(k, None)
             else:
                 unit1, unit2 = u
-                param_dist["reg__model__unit2"] = [unit2]
+                param_dist[f"{self._get_params_prefix()}__unit2"] = [unit2]
 
-            param_dist["reg__model__unit1"] = [unit1]
+            param_dist[f"{self._get_params_prefix()}__unit1"] = [unit1]
             if not self.use_PCA:
                 param_dist.pop("pca__n_components", None)
 
@@ -399,8 +411,8 @@ class KerasRandomSearchExecutor(ABC):
             save_path_subfolder = os.path.join(self.save_path, name)
             
             cv = KFold(n_splits=5, shuffle=True, random_state=self.seed)
-            reg = self._create_keras_wrapper(unit2)
-            pipeline = self._make_pipeline(reg)
+            wrapper = self._create_keras_wrapper(unit2)
+            pipeline = self._make_pipeline(wrapper)
 
             random_search = RandomizedSearchCV(
                 estimator=pipeline,
@@ -425,15 +437,15 @@ class KerasRandomSearchExecutor(ABC):
 
             # Re-fit finale del miglior modello
             best_params = random_search.best_params_
-            cleaned_hp = {k.replace('reg__', ''): v for k, v in best_params.items() if 'reg__' in k}
+            cleaned_hp = {k.replace('wrapper__', ''): v for k, v in best_params.items() if 'wrapper__' in k}
             
             n_comp = best_params.get("pca__n_components", None)
-            reg.set_params(**cleaned_hp)
+            wrapper.set_params(**cleaned_hp)
             
-            final_pipeline = self._make_pipeline(reg, n_components=n_comp)
+            final_pipeline = self._make_pipeline(wrapper, n_components=n_comp)
             final_pipeline.fit(self.train_loader.dataset.X, self.train_loader.dataset.y)
             
-            reg.model_.save(f"{save_path_subfolder}/model.keras")
+            self._get_model(wrapper).save(f"{save_path_subfolder}/model.keras")
 
 # --- SOTTOCLASSI CONCRETE ---
 class RandomizedSearchRegressionExecutor(KerasRandomSearchExecutor):
@@ -445,6 +457,12 @@ class RandomizedSearchRegressionExecutor(KerasRandomSearchExecutor):
 
     def _get_default_scoring(self):
         return "neg_mean_squared_error"
+    
+    def _get_params_prefix(self):
+        return "wrapper__regressor__model"
+    
+    def _get_model(self, wrapper):
+        return wrapper.regressor_.model_
 
     def _get_default_metrics(self):
         return [mee]
@@ -458,6 +476,12 @@ class RandomizedSearchClassificationExecutor(KerasRandomSearchExecutor):
 
     def _get_default_scoring(self):
         return "accuracy"
+    
+    def _get_params_prefix(self):
+        return "wrapper__classifier__model"
+    
+    def _get_model(self, wrapper):
+        return wrapper.model_
 
     def _get_default_metrics(self):
         return ["accuracy"]
