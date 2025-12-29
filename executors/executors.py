@@ -77,7 +77,8 @@ class OptunaExecutor(ABC):
         verbose: int = 0,
         baseline: float = None,
         n_jobs: int = 1,
-        default_metrics: list[str] | list[object] = None
+        default_metrics: list[str] | list[object] = None,
+        scale_y = False
     ):
         self.train_loader = train_loader
         self.units = units
@@ -103,6 +104,7 @@ class OptunaExecutor(ABC):
         self.n_jobs = n_jobs
         self.default_metrics = default_metrics
         self.loss = loss
+        self.scale_y = scale_y
 
     # ----------------------------
     # Utilities
@@ -239,6 +241,12 @@ class OptunaExecutor(ABC):
     # ----------------------------
 
     def execute(self):
+        if self.scale_y:
+            print("applying StandardScaler to y")
+            scaler = StandardScaler()
+            scaler.fit(self.train_loader.dataset.y)
+            self.train_loader.dataset.y = scaler.transform(self.train_loader.dataset.y)
+
         # Prepare dataset (optionally PCA), matching your business logic.
         train_dataset = self.train_loader.dataset
         if self.use_pca:
