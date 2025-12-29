@@ -337,18 +337,8 @@ class KerasRandomSearchExecutor(ABC):
     @abstractmethod
     def _get_params_prefix(self): pass
 
-    def _params_init(self):
-        self.param_distributions = {
-            f"{self._get_params_prefix()}__learning_rate": loguniform(1e-3, 1e-2),
-            f"{self._get_params_prefix()}__lambda_1": loguniform(3e-3, 1e-1),
-            f"{self._get_params_prefix()}__lambda_2": loguniform(3e-3, 1e-1),
-            f"{self._get_params_prefix()}__activation_1": ["relu", "gelu", "leaky_relu"],
-            f"{self._get_params_prefix()}__activation_2": ["relu", "gelu", "leaky_relu"],
-            f"{self._get_params_prefix()}__dropout_1": loguniform(0.2, 0.5),
-            f"{self._get_params_prefix()}__dropout_2": loguniform(0.2, 0.5),
-            "pca__n_components": [2],
-            f"{self._get_params_prefix()}__seed": [self.seed],
-        }
+    @abstractmethod
+    def _params_init(self): pass
 
     def _create_keras_wrapper(self, unit2):
         # LOGICA FISSA: Scelta della build function basata sulla presenza di unit2
@@ -463,6 +453,19 @@ class RandomizedSearchRegressionExecutor(KerasRandomSearchExecutor):
     
     def _get_model(self, wrapper):
         return wrapper.regressor_.model_
+    
+    def _params_init(self):
+        self.param_distributions = {
+            f"{self._get_params_prefix()}__learning_rate": loguniform(1e-3, 1e-2),
+            f"{self._get_params_prefix()}__lambda_1": loguniform(3e-3, 1e-1),
+            f"{self._get_params_prefix()}__lambda_2": loguniform(3e-3, 1e-1),
+            f"{self._get_params_prefix()}__activation_1": ["relu", "gelu", "leaky_relu"],
+            f"{self._get_params_prefix()}__activation_2": ["relu", "gelu", "leaky_relu"],
+            f"{self._get_params_prefix()}__dropout_1": loguniform(0.2, 0.5),
+            f"{self._get_params_prefix()}__dropout_2": loguniform(0.2, 0.5),
+            "pca__n_components": [2],
+            f"{self._get_params_prefix()}__seed": [self.seed],
+        }
 
     def _get_default_metrics(self):
         return [mee]
@@ -482,6 +485,12 @@ class RandomizedSearchClassificationExecutor(KerasRandomSearchExecutor):
     
     def _get_model(self, wrapper):
         return wrapper.model_
+    
+    def _params_init(self):
+        # todo: define the param distribution
+        self.param_distributions = {
+            
+        }
 
     def _get_default_metrics(self):
         return ["accuracy"]
