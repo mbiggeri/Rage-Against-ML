@@ -10,7 +10,7 @@ from torch.utils.data import TensorDataset, DataLoader
 from sklearn.preprocessing import StandardScaler, MinMaxScaler, RobustScaler
 from torch.optim.lr_scheduler import ReduceLROnPlateau
 from sklearn.model_selection import KFold
-from utils import get_ml_cup_data, MLCupDataset, GaussianNoise
+from utils.data_loader import get_ml_cup_data, MLCupDataset, GaussianNoise
 
 # --- CONTROL FLAGS (Set these to True/False as needed) ---
 USE_KFOLD = True    # Set to True to enable 5-Fold CV
