@@ -14,17 +14,37 @@ from sklearn.preprocessing import StandardScaler, MinMaxScaler
 from sklearn.decomposition import PCA
 
 # --- Integrated Classes from dataloaders/ ---
+class GaussianNoise:
+    """Applies Gaussian noise to the input tensor."""
+    def __init__(self, std=0.05, active=False):
+        self.std = std
+        self.active = active
+
+    def __call__(self, x):
+        if not self.active:
+            return x
+        # Generate noise with the same shape as the input x
+        noise = torch.randn_like(x) * self.std
+        return x + noise
 
 class MLCupDataset(Dataset):
-    def __init__(self, X, y):
+    def __init__(self, X, y, transform=None):
         self.X = X
         self.y = y
+        self.transform = transform # Store the transform (e.g., GaussianNoise)
 
     def __len__(self):
         return len(self.X)
 
     def __getitem__(self, idx):
-        return self.X[idx], self.y[idx]
+        x_sample = self.X[idx]
+        y_sample = self.y[idx]
+        
+        # Apply transform if it exists
+        if self.transform:
+            x_sample = self.transform(x_sample)
+            
+        return x_sample, y_sample
 
 class MLCupDataLoader(DataLoader):
     def __init__(self, dataset, batch_size, shuffle=True, **kwargs):
@@ -112,7 +132,6 @@ def get_monk1_data(batch_size, data_root='./data'):
 def get_ml_cup_data(batch_size, data_root='./data', validation_ratio=0.20, test_ratio=0.10, scaler: TransformerMixin=StandardScaler(), scale_target=True, num_workers=4):
     """
     Splits ML-CUP25-TR.csv into Train, Validation, and Internal Test.
-    Also loads ML-CUP25-TS.csv as the Blind Test set.
     """
     # Check if a GPU is available
     use_pin_memory = torch.cuda.is_available()
@@ -122,7 +141,6 @@ def get_ml_cup_data(batch_size, data_root='./data', validation_ratio=0.20, test_
     os.makedirs(ml_cup_dir, exist_ok=True)
     
     train_file = os.path.join(ml_cup_dir, 'ML-CUP25-TR.csv')
-    test_file = os.path.join(ml_cup_dir, 'ML-CUP25-TS.csv') # Blind test
 
     if not os.path.exists(train_file):
         print("Downloading ML-CUP25-TR train data...")
@@ -130,20 +148,13 @@ def get_ml_cup_data(batch_size, data_root='./data', validation_ratio=0.20, test_
         r = requests.get(url)
         with open(train_file, 'w') as f:
             f.write(r.text)
-            
-    if not os.path.exists(test_file):
-        print("Downloading ML-CUP25-TS test data...")
-        url = "https://gist.githubusercontent.com/FlavRomano/453dc2affc584028cb122d6b52cec295/raw/1cb1e84b26f8efd2ac081701d610c94498f988e1/ML-CUP25-TS.csv"
-        r = requests.get(url)
-        with open(test_file, 'w') as f:
-            f.write(r.text)
     
-    if not os.path.exists(train_file) or not os.path.exists(test_file):
-        print(f"ERROR: ML-CUP dataset files not found.")
+    if not os.path.exists(train_file):
+        print(f"ERROR: ML-CUP dataset file not found.")
         sys.exit(1)
 
     # --- Parser for ML-CUP data ---
-    def parse_ml_cup_file(file_path, is_blind=False):
+    def parse_ml_cup_file(file_path):
         features = []
         labels = []
         with open(file_path, 'r') as f:
@@ -154,19 +165,15 @@ def get_ml_cup_data(batch_size, data_root='./data', validation_ratio=0.20, test_
                 
                 parts = line.split(',')
                 # Check for sufficient columns (ID + 12 Inputs + 4 Targets = 17 columns)
-                if len(parts) < 17 and not is_blind: 
+                if len(parts) < 17: 
                     continue
                 
                 try:
-                    # FIX 1: Read columns 1 to 12 (Indices 1 to 13) as Features
+                    # Read columns 1 to 12 (Indices 1 to 13) as Features
                     feature_values = [float(p) for p in parts[1:13]]
                     
-                    if is_blind:
-                        # FIX 2: Create 4 dummy targets for blind test
-                        label_values = [0.0] * 4
-                    else:
-                        # FIX 3: Read columns 13 to 16 as Targets
-                        label_values = [float(p) for p in parts[13:17]]
+                    # Read columns 13 to 16 as Targets
+                    label_values = [float(p) for p in parts[13:17]]
                     
                     features.append(torch.tensor(feature_values, dtype=torch.float32))
                     labels.append(torch.tensor(label_values, dtype=torch.float32))
@@ -175,47 +182,37 @@ def get_ml_cup_data(batch_size, data_root='./data', validation_ratio=0.20, test_
 
         return torch.stack(features), torch.stack(labels)
 
-    print("Parsing ML-CUP data...")
+    print("Parsing ML-CUP data (TR only)...")
     # 1. Parse Labeled Data (TR)
-    full_x, full_y = parse_ml_cup_file(train_file, is_blind=False)
+    full_x, full_y = parse_ml_cup_file(train_file)
     
-    # 2. Parse Blind Test Data (TS)
-    blind_x, blind_y = parse_ml_cup_file(test_file, is_blind=True)
-
     # --- Splitting Strategy ---
     # Split TR into (Train+Val) and Internal Test
-    # Test Size = test_ratio (e.g., 0.10 of total)
     train_val_x, test_int_x, train_val_y, test_int_y = train_test_split(
         full_x, full_y, test_size=test_ratio, random_state=CONFIG["seed"]
     )
     
     # Split (Train+Val) into Train and Validation
     if validation_ratio > 0.0:
-        # Remaining % = 1.0 - test_ratio. 
-        # New Val Ratio = validation_ratio / (1.0 - test_ratio)
         adjusted_val_ratio = validation_ratio / (1.0 - test_ratio)
         train_x, val_x, train_y, val_y = train_test_split(
             train_val_x, train_val_y, test_size=adjusted_val_ratio, random_state=CONFIG["seed"]
         )
     else:
-        # If no validation set is requested, Train = Train+Val, Val = Empty
         train_x, train_y = train_val_x, train_val_y
         val_x = torch.empty((0, train_x.shape[1]), dtype=torch.float32)
         val_y = torch.empty((0, train_y.shape[1]), dtype=torch.float32)
 
-    print(f"Data Split: Train={len(train_x)}, Val={len(val_x)}, Internal Test={len(test_int_x)} (Blind Test={len(blind_x)})")
+    print(f"Data Split: Train={len(train_x)}, Val={len(val_x)}, Internal Test={len(test_int_x)}")
 
     # --- 1. Scale Inputs (X) ---
     if scaler:
         print(f"Applying scaling {scaler.__class__.__name__} to Inputs...")
-        # FIT ONLY ON TRAINING DATA
         scaler.fit(train_x)
-        
         train_x = torch.tensor(scaler.transform(train_x), dtype=torch.float32)
         if len(val_x) > 0:
             val_x = torch.tensor(scaler.transform(val_x), dtype=torch.float32)
         test_int_x = torch.tensor(scaler.transform(test_int_x), dtype=torch.float32)
-        blind_x = torch.tensor(scaler.transform(blind_x), dtype=torch.float32)
 
     # --- 2. Scale Targets (Y) ---
     target_scaler = None
@@ -231,29 +228,22 @@ def get_ml_cup_data(batch_size, data_root='./data', validation_ratio=0.20, test_
         if len(val_y) > 0:
             val_y = torch.tensor(target_scaler.transform(val_y.numpy()), dtype=torch.float32)
         test_int_y = torch.tensor(target_scaler.transform(test_int_y.numpy()), dtype=torch.float32)
-        # Do not transform blind_y (it's dummy zeros)
     
     # Create Datasets
     train_dataset = MLCupDataset(train_x, train_y)
     val_dataset = MLCupDataset(val_x, val_y)
     test_int_dataset = MLCupDataset(test_int_x, test_int_y)
-    blind_dataset = MLCupDataset(blind_x, blind_y) # Targets are dummy
     
     # Create Loaders
     train_loader = MLCupDataLoader(dataset=train_dataset, batch_size=batch_size, shuffle=True, num_workers=num_workers, pin_memory=use_pin_memory)
     val_loader = MLCupDataLoader(dataset=val_dataset, batch_size=batch_size, shuffle=False, num_workers=num_workers, pin_memory=use_pin_memory)
-    
-    # Internal Test Loader (Use this for MEE evaluation)
     internal_test_loader = MLCupDataLoader(dataset=test_int_dataset, batch_size=batch_size, shuffle=False, num_workers=num_workers, pin_memory=use_pin_memory)
     
-    # Blind Test Loader (Use this for Generating Predictions for Submission)
-    blind_test_loader = MLCupDataLoader(dataset=blind_dataset, batch_size=batch_size, shuffle=False, num_workers=num_workers, pin_memory=use_pin_memory)
-
     input_size = 12
     output_size = 4
     
-    # Returns: Train, Val, Internal_Test (labeled), Blind_Test (unlabeled), metadata...
-    return train_loader, val_loader, internal_test_loader, blind_test_loader, input_size, output_size, target_scaler
+    # Returns: Train, Val, Internal_Test, metadata...
+    return train_loader, val_loader, internal_test_loader, input_size, output_size, target_scaler
 
 # --- 3. Helper Functions (Merged from data_loader_2.py) ---
 

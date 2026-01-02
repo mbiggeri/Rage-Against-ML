@@ -1,81 +1,71 @@
-# RAGE AGAINST MACHINE LEARNING
+# Rage Against the Machine Learning - Project Overview
 
-1) All'inizio del main trovate tutti i parametri con cui chiamare i modelli per definire la rete, dataset, ecc... e far partire l'addestramento;
+This repository contains the code for the **Machine Learning 2025 Project**. It includes scripts for data analysis, model training (SVM, Neural Networks, Ensembles), hyperparameter optimization, and final model evaluation.
 
-2) Per definire nuovi modelli fate un file apposito in models e poi implementate la chiamata nel main così manteniamo tutto ordinato;
+## 📂 1. Notebooks (`.ipynb`)
 
-3) Non ho aggiunto niente delle SVM ho solo messo l'import della libreria all'inizio;
+These notebooks are used for exploration, analysis, and running experiments interactively.
 
-4) Appena lo trovo aggiungo al progetto anche il file che avevo nella tesi per la ricerca degli iperparametri, così si può adattare al nostro main (sarà un file simile perché deve inizializzare tutto allo stesso modo, con la differenza che dovremo definire della roba in più per impostare i parametri di ricerca di optuna)
-
-5) Sarebbe utile implementare un early-stopping per evitare che il modello overfitti senza dover cercare un numero preciso di epoche di addestramento
------
-
-## Cose da fare:
-
-- Implementare Grid search (dalle slide sembra obbligatorio farlo prima di provate altri metodi, come Optuna)
-
-- Implementare SVM
-
-- Per MLP: 
-1. implementare dropout e L2 regularization
-2. Controllare come influisce lo scaling dei dati in input
-
-- Implementare altri modelli interessanti
-
-- Provare a implementare Random Forest
------
-
-## Esempi di script per avviare il programma
-
-python main.py --dataset monk1 --activation tanh --hidden_sizes 3 --epochs 1000 --batch_size 64 --lr 0.001
-
-python main.py --dataset ml_cup --activation tanh --hidden_sizes 50 20 --epochs 150 --batch_size 64 --lr 0.001
-
-python main.py --dataset mnist --activation sigmoid --hidden_sizes 256 128 64 --epochs 10 --batch_size 64
-
-python main.py --dataset mnist --activation sigmoid --hidden_sizes 256 128 64 --epochs 10 --batch_size 64
-
------
+* **`dataset-analysis.ipynb`**
+* Performs exploratory data analysis (EDA) on the Monk and CUP datasets. It includes visualization of feature distributions, correlation matrices, and PCA (Principal Component Analysis) to understand the data structure.
 
 
-## Script SVM
-Script base per provare modelli di SVC e SVR sui vari dataset. Di seguito alcuni comandi di esempio per provarlo:
-
-python run_svm.py --model svr --dataset mlc25 --svm_kernel poly
-
-python run_svm.py --model svr --dataset mlc25 --svm_kernel rbf  --C 2.0 --gamma scale
-
-python run_svm.py --model svc --dataset monk1 --svm_kernel linear
-
-python run_svm.py --model svc --dataset monk1 --svm_kernel rbf --C 1.0 --gamma scale
-
-## Ricerca Iperparametri (Optuna)
-
-Lo script `optuna_search.py` permette di cercare automaticamente la migliore combinazione di parametri (learning rate, numero di neuroni, funzioni di attivazione e tutto quello che vuoi amore).
-Puoi cambiare gli insiemi da cui Optuna può pescare gli iperparametri in questo modo:
-- `batch_size = trial.suggest_categorical("batch_size", [32, 64, 128])` diventa `batch_size = trial.suggest_categorical("batch_size", [64, 128])` per escludere il valore 32 dalla scelta (suggest_categorical sceglie uno tra i valori indicati).
-- `n_layers = trial.suggest_int("n_layers", 1, 3)` diventa `n_layers = trial.suggest_int("n_layers", 4, 6)` per cercare solo reti con un numero compreso tra 4 e 6 hidden layers (suggest_int sceglie un valore intero compreso tra il primo e il secondo indicati)
-- Penso che il concetto sia chiaro anche senza fare altri esempi di `suggest_xyz`.
-
-### Come funziona
-Lo script definisce una "funzione obiettivo" che restituisce un punteggio per ogni configurazione testata. Optuna cercherà automaticamente di massimizzare questo punteggio se è una metrica di bontà (Accuratezza per MONK/MNIST/...) o di minimizzarlo se è un errore (MSE per ML-CUP). In ogni esecuzione (Trial):
-1.  Optuna testa dei parametri "promettenti"*.
-2.  Viene addestrata una rete con quei parametri.
-3.  Se la rete sta andando male rispetto alle altre, Optuna la interrompe subito (**Pruning**) per risparmiare tempo. Vengono fatti in sostanza meno trial di quelli indicati, perché alcuni saranno pessimi.
-4.  Alla fine, salva i parametri migliori in `results/best_params_<dataset>.json`.
+* **`svm_analysis.ipynb`**
+* Dedicated to Support Vector Machines (SVM). It handles data loading, preprocessing, hyperparameter tuning (using Random Search), and performance evaluation for SVM models on both Monk and CUP tasks.
 
 
-*A differenza della ricerca casuale (Random Search) o della griglia (Grid Search), Optuna utilizza di default un approccio Bayesiano chiamato Tree-structured Parzen Estimator (TPE).
+* **`keras_nn.ipynb`**
+* The main notebook for Neural Network experiments using Keras/TensorFlow. It defines model architectures, runs training loops, and evaluates results. It likely integrates with the optimization results found by Optuna.
 
-In parole semplici, Optuna costruisce un modello probabilistico basato sulla storia dei trial passati. Divide le configurazioni provate in "buone" e "cattive" e cerca di capire quali valori degli iperparametri (es. un learning rate basso o alto) sono correlati ai risultati migliori. Al trial successivo, non "tira a indovinare", ma pesca i parametri dalle zone che il modello ritiene più promettenti, concentrando lo sforzo dove è più probabile trovare l'ottimo.
 
-Il paper: [Optuna: A Next-generation Hyperparameter Optimization Framework] https://arxiv.org/abs/1907.10902
+* **`ensemble_optimization.ipynb`**
+* Focuses on building and optimizing an Ensemble model. It combines multiple trained models (e.g., best neural networks) to improve prediction stability and accuracy, using techniques like averaging or weighted voting.
 
-### Esempio di utilizzo
-```bash
-# Per classificazione (MONK-1), esegue 100 tentativi ognuno per 20 epoche.
-python optuna_search.py --dataset monk1 --trials 100 --epochs 20
 
-# Per regressione (ML-CUP), esegue 50 tentativi ognuno con 50 epoche.
-python optuna_search.py --dataset mlc25 --trials 50 --epochs 50
+
+## 📜 2. Main Scripts (`.py`)
+
+Executable scripts for running long-duration tasks like hyperparameter search.
+
+* **`optuna_search_mlcup_nn.py`**
+* A script dedicated to automating hyperparameter optimization for Neural Networks using **Optuna**. It defines the search space (layers, units, learning rates) and runs many trials to find the best configuration for the ML-CUP dataset.
+
+
+* **`training_utils.py`**
+* Contains helper functions used across notebooks and scripts for training loops, including functions to split data, handle callbacks, or manage experiment logging.
+
+
+
+## 🛠️ 3. Modules & Libraries
+
+Reusable code organized by functionality.
+
+### `models/`
+
+* **`standard.py`**: Defines standard/baseline model classes or factories.
+* **`svm_models.py`**: Wrappers and utility classes specifically for creating and managing SVM models (SVR/SVC).
+* **`ensemble.py`**: Implements the `Ensemble` class logic, allowing you to combine predictions from multiple base estimators.
+
+### `utils/`
+
+* **`data_loader.py`**: Functions to load CSV files (`ML-CUP25-TR.csv`, `monks-*.csv`), handle parsing, and perform initial preprocessing.
+* **`plot.py`**: Visualization utilities to generate consistent plots for learning curves (Loss/MEE vs. Epochs) and model comparisons.
+* **`optuna.py`**: Helper functions to streamline Optuna studies, such as saving/loading study databases or defining objective functions.
+* **`keras.py`**: Utilities specific to Keras models, possibly custom callbacks or layer definitions.
+
+### `losses/`
+
+* **`MeanEuclidianError.py`**: Implementation of the **MEE (Mean Euclidean Error)** loss function, which is the specific metric required for the ML-CUP competition.
+
+### `executors/`
+
+* **`executors.py`**: Classes or functions that manage the execution flow of training and testing, helping to decouple the model logic from the running logic.
+
+---
+
+### 🚀 Quick Start
+
+1. **Explore Data:** Start with `dataset-analysis.ipynb`.
+2. **Optimize Models:** Run `optuna_search_mlcup_nn.py` to find the best hyperparameters.
+3. **Train & Evaluate:** Use `keras_nn.ipynb` or `svm_analysis.ipynb` to train your final models using the best parameters found.
+4. **Final Submission:** (To be implemented) Use the best models to generate predictions on the blind test set.
