@@ -1,8 +1,8 @@
 import torch
 import torch.nn as nn
-import torch.optim as optim
+import numpy as np
 from models import StandardFeedForwardNet
-from models.ensemble import ModelWithHead, ReadoutAdapter
+# from models.ensemble import ModelWithHead, ReadoutAdapter # Uncomment only if you actually have this file
 
 def build_model(params, input_size, output_size, device, is_regression=True):
     """
@@ -10,27 +10,23 @@ def build_model(params, input_size, output_size, device, is_regression=True):
     """
     hidden_sizes = params['hidden_sizes']
     activation = params['activation']
-    model_type = params.get('model', 'standard') # Default to standard if not specified
-    dropout = params.get('dropout_rate', 0.0)    # Support dropout if added later
-
-    if model_type == 'standard':
-        base = StandardFeedForwardNet(input_size, hidden_sizes, output_size, activation)
-    else:
-        raise ValueError(f"Unknown model type: {model_type}")
-
-    # Wrap in ModelWithHead for consistency (useful for Ensembles later)
-    # For regression, readout is Identity. For classification, it's a Linear layer if needed.
-    mode = 'regression' if is_regression else 'classification'
-    model = ModelWithHead(base, ReadoutAdapter(output_size, output_size, mode))
+    dropout = params.get('dropout', 0.0)  # Changed key to match Optuna script ('dropout' vs 'dropout_rate')
+    
+    # --- FIX 1: Pass dropout to the constructor ---
+    model = StandardFeedForwardNet(
+        input_size=input_size, 
+        hidden_sizes=hidden_sizes, 
+        output_size=output_size, 
+        activation=activation, 
+        dropout=dropout
+    )
     
     return model.to(device)
 
 def train_one_epoch(model, loader, optimizer, criterion, device):
-    """
-    Trains the model for one epoch and returns the average loss.
-    """
     model.train()
-    total_loss = 0.0
+    running_loss = 0.0
+    total_samples = 0
     
     for data, target in loader:
         data, target = data.to(device), target.to(device)
@@ -39,41 +35,53 @@ def train_one_epoch(model, loader, optimizer, criterion, device):
         output = model(data)
         loss = criterion(output, target)
         loss.backward()
+        
+        # Optional: Add gradient clipping here for safety
+        torch.nn.utils.clip_grad_norm_(model.parameters(), max_norm=1.0)
+        
         optimizer.step()
         
-        total_loss += loss.item()
+        # --- FIX 3: Weighted average for accurate epoch loss ---
+        batch_size = data.size(0)
+        running_loss += loss.item() * batch_size
+        total_samples += batch_size
         
-    return total_loss / len(loader)
+    return running_loss / total_samples
 
 def evaluate(model, loader, criterion, device, target_scaler=None):
     """
     Evaluates the model. 
     If target_scaler is provided, calculates metrics on the ORIGINAL scale (Real MSE).
-    If target_scaler is None, calculates metrics on the SCALED scale (Loss).
     """
     model.eval()
-    total_loss = 0.0
+    running_loss = 0.0
+    total_samples = 0
     
     with torch.no_grad():
         for data, target in loader:
             data, target = data.to(device), target.to(device)
             output = model(data)
             
+            # --- FIX 2: Handle Unscaling efficiently (Pure Numpy) ---
             if target_scaler is not None:
-                # 1. Move to CPU to use sklearn
+                # Move to CPU/Numpy
                 out_np = output.cpu().numpy()
                 tgt_np = target.cpu().numpy()
                 
-                # 2. Inverse Transform
+                # Inverse Transform to Real Scale
                 out_real = target_scaler.inverse_transform(out_np)
                 tgt_real = target_scaler.inverse_transform(tgt_np)
                 
-                # 3. Convert back to tensor for the criterion (or use numpy directly)
-                # Using tensor ensures compatibility if criterion is a torch function
-                output = torch.tensor(out_real, device=device)
-                target = torch.tensor(tgt_real, device=device)
+                # Calculate Squared Error in Numpy (Avoid moving back to GPU)
+                # This assumes criterion is MSE. If it's something else, this logic needs adapting.
+                batch_loss = np.mean((out_real - tgt_real) ** 2)
+            else:
+                # Standard PyTorch loss on scaled data
+                batch_loss = criterion(output, target).item()
 
-            loss = criterion(output, target)
-            total_loss += loss.item()
+            # --- FIX 3: Weighted average ---
+            batch_size = data.size(0)
+            running_loss += batch_loss * batch_size
+            total_samples += batch_size
             
-    return total_loss / len(loader)
+    return running_loss / total_samples
