@@ -20,3 +20,5 @@ keras/
 svm_saved_models/
 batch_logs/
 run_notebook.py
+svm_result_analysis.py
+results_summary.csv
