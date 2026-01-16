@@ -1,5 +1,5 @@
 from .data_loader import get_ml_cup_data
-from .data_loader import get_monk1_data
+from .data_loader import load_monk
 from .data_loader import split_dataloader
 from .data_loader import cv_fold_split
 from .data_loader import apply_pca_on_X
