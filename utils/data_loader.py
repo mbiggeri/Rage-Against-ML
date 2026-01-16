@@ -22,25 +22,33 @@ with open('./config/keras_nn.json') as keras_nn_config:
 
 # --- 2. Data Loading ---
 
-def get_monk1_data(batch_size, data_root='./data'):
+# --- Funzione Helper per evitare duplicazione di codice ---
+def load_monk(dataset_id, batch_size, data_root='./data'):
+    """
+    Generic MONK dataset loader for MONK-1, MONK-2, MONK-3.
+    """
     monk_dir = os.path.join(data_root, 'monk')
     os.makedirs(monk_dir, exist_ok=True)
     
-    train_file = os.path.join(monk_dir, 'monks-1.train')
-    test_file = os.path.join(monk_dir, 'monks-1.test')
+    filename_train = f'monks-{dataset_id}.train'
+    filename_test = f'monks-{dataset_id}.test'
+    
+    train_file = os.path.join(monk_dir, filename_train)
+    test_file = os.path.join(monk_dir, filename_test)
+    
+    # Base URL UCI Repository
+    base_url = "https://archive.ics.uci.edu/ml/machine-learning-databases/monks-problems/"
     
     # Download if files don't exist
     if not os.path.exists(train_file):
-        print("Downloading MONK-1 train data...")
-        url = "https://archive.ics.uci.edu/ml/machine-learning-databases/monks-problems/monks-1.train"
-        r = requests.get(url)
+        print(f"Downloading MONK-{dataset_id} train data...")
+        r = requests.get(base_url + filename_train)
         with open(train_file, 'w') as f:
             f.write(r.text)
             
     if not os.path.exists(test_file):
-        print("Downloading MONK-1 test data...")
-        url = "https://archive.ics.uci.edu/ml/machine-learning-databases/monks-problems/monks-1.test"
-        r = requests.get(url)
+        print(f"Downloading MONK-{dataset_id} test data...")
+        r = requests.get(base_url + filename_test)
         with open(test_file, 'w') as f:
             f.write(r.text)
 
@@ -71,7 +79,7 @@ def get_monk1_data(batch_size, data_root='./data'):
                 
         return torch.stack(features), torch.tensor(labels, dtype=torch.long)
 
-    print("Parsing MONK-1 data...")
+    print(f"Parsing MONK-{dataset_id} data...")
     train_x, train_y = parse_monk_file(train_file)
     test_x, test_y = parse_monk_file(test_file)
     
@@ -85,6 +93,8 @@ def get_monk1_data(batch_size, data_root='./data'):
     output_size = 2
     
     return train_loader, test_loader, input_size, output_size
+
+
 
 def get_ml_cup_data(batch_size, data_root='./data', test_ratio=0.20, mps=False, scaler: TransformerMixin=None) -> tuple[MLCupDataLoader, MLCupDataLoader]:
     # data will be in ./MLC25/
@@ -221,3 +231,5 @@ def apply_pca_on_X(dataset, n_components, standardize=True):
     new_dataset = deepcopy(dataset)
     new_dataset.X = X_pca
     return new_dataset
+
+
