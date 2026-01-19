@@ -25,3 +25,5 @@ final_svm_results_summary.csv
 svm_finetuning.ipynb
 svm_result_analysis.py
 ensemble_test.py
+best_svm_mlcup_list.joblib
+best_svm_mlcup_single.joblib
