@@ -18,8 +18,8 @@ These notebooks are used for exploration, analysis, and running experiments inte
 * The main notebook for Neural Network experiments using Keras/TensorFlow. It defines model architectures, runs training loops, and evaluates results. It likely integrates with the optimization results found by Optuna.
 
 
-* **`ensemble_optimization.ipynb`**
-* Focuses on building and optimizing an Ensemble model. It combines multiple trained models (e.g., best neural networks) to improve prediction stability and accuracy, using techniques like averaging or weighted voting.
+* **`ensemble_mlcup.ipynb`**
+* Focuses on building and evaluating a **Heterogeneous Ensemble** model for the ML-CUP task. It loads the best trained models (PyTorch, Keras, SVM), combines their predictions (e.g., via averaging), and generating the final blind test submission file.
 
 
 
@@ -27,11 +27,11 @@ These notebooks are used for exploration, analysis, and running experiments inte
 
 Executable scripts for running long-duration tasks like hyperparameter search.
 
-* **`optuna_search_mlcup_nn.py`**
+* **`utils/optuna_search_mlcup_nn.py`**
 * A script dedicated to automating hyperparameter optimization for Neural Networks using **Optuna**. It defines the search space (layers, units, learning rates) and runs many trials to find the best configuration for the ML-CUP dataset.
 
 
-* **`training_utils.py`**
+* **`utils/training_utils.py`**
 * Contains helper functions used across notebooks and scripts for training loops, including functions to split data, handle callbacks, or manage experiment logging.
 
 
@@ -59,13 +59,18 @@ Reusable code organized by functionality.
 
 ### `executors/`
 
-* **`executors.py`**: Classes or functions that manage the execution flow of training and testing, helping to decouple the model logic from the running logic.
+* **`executors.py`**: Contains `Executor` classes (e.g. `OptunaRegressorExecutor`) that encapsulate the complex logic for running training loops, cross-validation, and hyperparameter searches. They help keep the notebooks clean by handling the execution flow (data splitting, model building, trial execution) behind the scenes.
 
 ---
 
 ### 🚀 Quick Start
 
-1. **Explore Data:** Start with `dataset-analysis.ipynb`.
-2. **Optimize Models:** Run `optuna_search_mlcup_nn.py` to find the best hyperparameters.
-3. **Train & Evaluate:** Use `keras_nn.ipynb` or `svm_analysis.ipynb` to train your final models using the best parameters found.
-4. **Final Submission:** (To be implemented) Use the best models to generate predictions on the blind test set.
+1. **Explore Data:** Start with `dataset-analysis.ipynb` for EDA.
+2. **Optimize Models:** Run `optuna_search_mlcup_nn.py` (or use the cells in `pytorch_nn.ipynb`) to find the best hyperparameters.
+3. **Train & Evaluate:** 
+   - Run `pytorch_nn.ipynb` and `keras_nn.ipynb` to train the best Neural Network models.
+   - Run `svm_analysis.ipynb` to find and train the best SVM models.
+   - All notebooks will save their best models to the `models/` directory and log results to `all_results.json`.
+4. **Compare & Ensemble:**
+   - Run `compare_models.ipynb` to visualize performance across frameworks.
+   - Run `ensemble_mlcup.ipynb` to load the best saved models, evaluate the heterogeneous ensemble, and generate the final `submission_ensemble.csv` for the blind test set.

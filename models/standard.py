@@ -53,3 +53,38 @@ class StandardFeedForwardNet(nn.Module):
         if x.dim() > 2:
             x = x.view(x.size(0), -1)
         return self.layers(x)
+
+class ReadoutAdapter(nn.Module):
+    """
+    Adapter layer to format the output of the base model for a specific task.
+    For regression, it's typically Identity or a Linear projection if dims mismatch.
+    """
+    def __init__(self, input_size, output_size, task_type='regression'):
+        super(ReadoutAdapter, self).__init__()
+        self.task_type = task_type
+        
+        # If input != output, we might need a projection, 
+        # BUT usually the Base Model's last layer already outputs 'output_size'.
+        # Assuming Base Model outputs [Batch, Output_Size]
+        
+        # In this project, StandardFeedForwardNet(..., output_size=OUTPUT_SIZE) 
+        # already produces the correct dimension.
+        # So ReadoutAdapter might just be an Identity pass-through or final activation.
+        
+        self.output_layer = nn.Identity()
+            
+    def forward(self, x):
+        return self.output_layer(x)
+
+class ModelWithHead(nn.Module):
+    """
+    Wraps a base backbone (feature extractor) and a task-specific head (readout).
+    """
+    def __init__(self, base_model, head):
+        super(ModelWithHead, self).__init__()
+        self.base = base_model
+        self.head = head
+        
+    def forward(self, x):
+        features = self.base(x)
+        return self.head(features)

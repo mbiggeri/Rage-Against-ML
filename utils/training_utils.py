@@ -45,6 +45,40 @@ def train_one_epoch(model, loader, optimizer, criterion, device):
         
     return total_loss / len(loader)
 
+def evaluate_mee(model, loader, device, target_scaler=None):
+    """
+    Evaluates the model using Mean Euclidean Error (MEE).
+    Always calculates on the ORIGINAL scale (Real MEE).
+    """
+    model.eval()
+    total_mee = 0.0
+    total_samples = 0
+    
+    with torch.no_grad():
+        for data, target in loader:
+            data, target = data.to(device), target.to(device)
+            output = model(data)
+            
+            # Move to CPU/Numpy for calculation
+            out_np = output.cpu().numpy()
+            tgt_np = target.cpu().numpy()
+            
+            if target_scaler is not None:
+                out_real = target_scaler.inverse_transform(out_np)
+                tgt_real = target_scaler.inverse_transform(tgt_np)
+            else:
+                out_real = out_np
+                tgt_real = tgt_np
+                
+            # Calculate Euclidean distance for each sample
+            diff = out_real - tgt_real
+            euclidean_dists = (diff**2).sum(axis=1)**0.5
+            
+            total_mee += euclidean_dists.sum()
+            total_samples += data.size(0)
+            
+    return total_mee / total_samples
+
 def evaluate(model, loader, criterion, device, target_scaler=None):
     """
     Evaluates the model. 
