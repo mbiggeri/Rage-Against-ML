@@ -1,4 +1,5 @@
 import os
+import time
 import json
 import joblib
 import numpy as np
@@ -21,7 +22,9 @@ class BaseSVMWrapper:
             self.model = SVR(**kwargs)
     
     def fit(self, X, y):
+        start_time = time.time()
         self.model.fit(X, y)
+        self.train_time = time.time() - start_time
         return self
 
     def predict(self, X):
