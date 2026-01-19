@@ -21,3 +21,7 @@ svm_saved_models/
 batch_logs/
 run_notebook.py
 optuna_mlcup_nn.db
+final_svm_results_summary.csv
+svm_finetuning.ipynb
+svm_result_analysis.py
+ensemble_test.py
