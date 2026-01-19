@@ -217,9 +217,10 @@ if __name__ == "__main__":
     parser = argparse.ArgumentParser(description="Run Optuna Hyperparameter Search")
     parser.add_argument('--n_trials', type=int, default=100)
     parser.add_argument('--epochs', type=int, default=20)
+    parser.add_argument('--study_name', type=str, default="mlcup_search", help="Name of the study (and output folder)")
     args = parser.parse_args()
 
-    print(f"Starting Search: Trials={args.n_trials}, Epochs={args.epochs}")
+    print(f"Starting Search: Trials={args.n_trials}, Epochs={args.epochs}, Study={args.study_name}")
     optuna.logging.set_verbosity(optuna.logging.WARNING)
 
     db_url = "sqlite:///optuna_mlcup_nn.db"
@@ -227,12 +228,31 @@ if __name__ == "__main__":
 
     try:
         study = optuna.create_study(
-            study_name="mlcup_search",
+            study_name=args.study_name,
             storage=storage,
             load_if_exists=True,
             direction="minimize"
         )
         study.optimize(lambda trial: objective(trial, epochs=args.epochs), n_trials=args.n_trials)
         print("Search complete.")
+        
+        # --- SAVE RESULTS TO CSV ---
+        # Create directory based on study name
+        save_dir = os.path.join("pytorch/models/optuna", args.study_name)
+        os.makedirs(save_dir, exist_ok=True)
+        
+        # Save dataframe
+        df = study.trials_dataframe()
+        csv_path = os.path.join(save_dir, "optuna_results.csv")
+        df.to_csv(csv_path, index=False)
+        print(f"Study results saved to {csv_path}")
+        
+        # Save best params as JSON
+        import json
+        json_path = os.path.join(save_dir, "hp.json")
+        with open(json_path, "w") as f:
+            json.dump(study.best_params, f, indent=4)
+        print(f"Best params saved to {json_path}")
+        
     finally:
         storage.engine.dispose()

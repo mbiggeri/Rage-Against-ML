@@ -1,0 +1,10 @@
+{
+    "scaler": "standard",
+    "scale_target": true,
+    "n_layers": 2,
+    "hidden_size": 30,
+    "dropout": 0.13508185106519627,
+    "weight_decay": 0.0001855726801633577,
+    "activation": "relu",
+    "lr": 0.08717315365854672
+}

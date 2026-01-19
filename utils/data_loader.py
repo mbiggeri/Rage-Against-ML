@@ -65,25 +65,34 @@ except FileNotFoundError:
 
 # --- 2. Data Loading Functions ---
 
-def get_monk1_data(batch_size, data_root='./data'):
+def get_monk_data(monk_id, batch_size, data_root='./data'):
+    """
+    Loads Monk dataset (1, 2, or 3).
+    """
+    if monk_id not in [1, 2, 3]:
+        raise ValueError("monk_id must be 1, 2, or 3")
+
     monk_dir = os.path.join(data_root, 'monk')
     os.makedirs(monk_dir, exist_ok=True)
     
-    train_file = os.path.join(monk_dir, 'monks-1.train')
-    test_file = os.path.join(monk_dir, 'monks-1.test')
+    train_filename = f'monks-{monk_id}.train'
+    test_filename = f'monks-{monk_id}.test'
+    
+    train_file = os.path.join(monk_dir, train_filename)
+    test_file = os.path.join(monk_dir, test_filename)
+    
+    base_url = "https://archive.ics.uci.edu/ml/machine-learning-databases/monks-problems/"
     
     # Download if files don't exist
     if not os.path.exists(train_file):
-        print("Downloading MONK-1 train data...")
-        url = "https://archive.ics.uci.edu/ml/machine-learning-databases/monks-problems/monks-1.train"
-        r = requests.get(url)
+        print(f"Downloading MONK-{monk_id} train data...")
+        r = requests.get(base_url + train_filename)
         with open(train_file, 'w') as f:
             f.write(r.text)
             
     if not os.path.exists(test_file):
-        print("Downloading MONK-1 test data...")
-        url = "https://archive.ics.uci.edu/ml/machine-learning-databases/monks-problems/monks-1.test"
-        r = requests.get(url)
+        print(f"Downloading MONK-{monk_id} test data...")
+        r = requests.get(base_url + test_filename)
         with open(test_file, 'w') as f:
             f.write(r.text)
 
@@ -114,7 +123,7 @@ def get_monk1_data(batch_size, data_root='./data'):
                 
         return torch.stack(features), torch.tensor(labels, dtype=torch.long)
 
-    print("Parsing MONK-1 data...")
+    print(f"Parsing MONK-{monk_id} data...")
     train_x, train_y = parse_monk_file(train_file)
     test_x, test_y = parse_monk_file(test_file)
     
@@ -125,7 +134,8 @@ def get_monk1_data(batch_size, data_root='./data'):
     test_loader = DataLoader(dataset=test_dataset, batch_size=batch_size, shuffle=False)
     
     input_size = 17
-    output_size = 2
+    output_size = 2 # Binary classification (0 or 1), but usually treated as 1 output with sigmoid or 2 with softmax. 
+                    # PyTorch CrossEntropyLoss expects class indices, so output_size=2 is good for that.
     
     return train_loader, test_loader, input_size, output_size
 

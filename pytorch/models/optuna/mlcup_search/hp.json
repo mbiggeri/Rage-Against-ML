@@ -1,0 +1,9 @@
+{
+    "scaler_post_pca": "none",
+    "scale_target": true,
+    "hidden_size": 31,
+    "dropout": 0.14588543006053015,
+    "weight_decay": 0.0001524355673427964,
+    "activation": "mish",
+    "lr": 0.04143496911851454
+}
