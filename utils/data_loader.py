@@ -198,9 +198,14 @@ def get_ml_cup_data(batch_size, data_root='./data', validation_ratio=0.20, test_
     
     # --- Splitting Strategy ---
     # Split TR into (Train+Val) and Internal Test
-    train_val_x, test_int_x, train_val_y, test_int_y = train_test_split(
-        full_x, full_y, test_size=test_ratio, random_state=CONFIG["seed"]
-    )
+    if test_ratio > 0:
+        train_val_x, test_int_x, train_val_y, test_int_y = train_test_split(
+            full_x, full_y, test_size=test_ratio, random_state=CONFIG["seed"]
+        )
+    else:
+        train_val_x, train_val_y = full_x, full_y
+        test_int_x = torch.empty((0, full_x.shape[1]), dtype=torch.float32)
+        test_int_y = torch.empty((0, full_y.shape[1]), dtype=torch.float32)
     
     # Split (Train+Val) into Train and Validation
     if validation_ratio > 0.0:
@@ -222,7 +227,8 @@ def get_ml_cup_data(batch_size, data_root='./data', validation_ratio=0.20, test_
         train_x = torch.tensor(scaler.transform(train_x), dtype=torch.float32)
         if len(val_x) > 0:
             val_x = torch.tensor(scaler.transform(val_x), dtype=torch.float32)
-        test_int_x = torch.tensor(scaler.transform(test_int_x), dtype=torch.float32)
+        if len(test_int_x) > 0:
+            test_int_x = torch.tensor(scaler.transform(test_int_x), dtype=torch.float32)
 
     # --- 2. Scale Targets (Y) ---
     target_scaler = None
@@ -237,7 +243,8 @@ def get_ml_cup_data(batch_size, data_root='./data', validation_ratio=0.20, test_
         train_y = torch.tensor(target_scaler.transform(train_y.numpy()), dtype=torch.float32)
         if len(val_y) > 0:
             val_y = torch.tensor(target_scaler.transform(val_y.numpy()), dtype=torch.float32)
-        test_int_y = torch.tensor(target_scaler.transform(test_int_y.numpy()), dtype=torch.float32)
+        if len(test_int_y) > 0:
+            test_int_y = torch.tensor(target_scaler.transform(test_int_y.numpy()), dtype=torch.float32)
     
     # Create Datasets
     train_dataset = MLCupDataset(train_x, train_y)

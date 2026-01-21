@@ -13,10 +13,10 @@ from sklearn.model_selection import KFold
 from utils.data_loader import MLCupDataset, GaussianNoise
 
 # --- CONTROL FLAGS ---
-USE_KFOLD = True    
+USE_KFOLD = True   
 K_FOLDS = 5
-USE_NOISE = False    
-NOISE_STD = 0.05     
+USE_NOISE = True
+NOISE_STD = 0.10     
 
 # Ensure local modules can be found
 sys.path.append(os.getcwd())
@@ -37,7 +37,7 @@ print(f"Loading RAW data on {DEVICE} for dynamic scaling...")
 
 # 1. LOAD RAW DATA
 train_loader_raw, val_loader_raw, internal_test_raw, INPUT_SIZE, OUTPUT_SIZE, _ = get_ml_cup_data(
-    BATCH_SIZE, validation_ratio=0.15, test_ratio=0.10, scaler=None, scale_target=False, num_workers=0
+    BATCH_SIZE, validation_ratio=0.0, test_ratio=0.20, scaler=None, scale_target=False, num_workers=0
 )
 
 # 2. PRE-PROCESSING & PCA LOGIC
@@ -84,10 +84,13 @@ def objective(trial, epochs=100):
 
     use_target_scaling = trial.suggest_categorical("scale_target", [True, False])
 
-    noise_transform = GaussianNoise(std=NOISE_STD, active=USE_NOISE)
+    # Gaussian Noise (Hyperparameter)
+    noise_std = trial.suggest_float("gaussian_noise", 0.0, 0.1)
+    noise_transform = GaussianNoise(std=noise_std, active=True)
 
-    n_layers = trial.suggest_int("n_layers", 1, 2)
-    hidden_size = trial.suggest_int("hidden_size", 4, 32, log=True)
+    #n_layers = trial.suggest_int("n_layers", 3)
+    n_layers = 3
+    hidden_size = trial.suggest_int("hidden_size", 4, 16, log=True)
     hidden_sizes = [hidden_size] * n_layers
     dropout = trial.suggest_float("dropout", 0.1, 0.5)
     weight_decay = trial.suggest_float("weight_decay", 1e-6, 1e-3, log=True)

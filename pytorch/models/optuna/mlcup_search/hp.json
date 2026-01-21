@@ -1,9 +1,10 @@
 {
-    "scaler_post_pca": "none",
+    "scaler": "standard",
     "scale_target": true,
-    "hidden_size": 31,
-    "dropout": 0.14588543006053015,
-    "weight_decay": 0.0001524355673427964,
-    "activation": "mish",
-    "lr": 0.04143496911851454
+    "gaussian_noise": 0.0632636216524357,
+    "hidden_size": 14,
+    "dropout": 0.10217150942682192,
+    "weight_decay": 6.3269102971301685e-06,
+    "activation": "silu",
+    "lr": 0.08987628079997402
 }

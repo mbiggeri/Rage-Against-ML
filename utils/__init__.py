@@ -18,8 +18,8 @@ except ImportError as e:
     print(f"⚠️  Warning: Keras/TensorFlow utils not loaded. Reason: {e}")
     pass
 
-from .optuna import delete_pruned_trial_dirs
-from .optuna import import_csv
+from .optuna_utils import delete_pruned_trial_dirs
+from .optuna_utils import import_csv
 
 from .plot import plot_prediction_error
 from .plot import plot_cv_bar_per_fold

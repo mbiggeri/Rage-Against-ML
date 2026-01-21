@@ -1,0 +1,10 @@
+{
+    "scaler": "standard",
+    "scale_target": true,
+    "gaussian_noise": 0.061871255288155694,
+    "hidden_size": 23,
+    "dropout": 0.10931516958616493,
+    "weight_decay": 1.1216990119294307e-06,
+    "activation": "relu",
+    "lr": 0.0772411979336808
+}

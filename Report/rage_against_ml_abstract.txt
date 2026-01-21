@@ -1,0 +1,5 @@
+### Rage Against Machine Learning - Project B - Flavio Romano / Michael Biggeri / Ionut Alexandru Ostache ###
+
+We performed a comparative analysis of Neural Networks (implemented in PyTorch and Keras) and SVMs (Scikit-learn).
+The final CUP system ensembles the top-performing PyTorch and SVM models, tuned via Randomized Search and Optuna with a TR/VL/Internal-TS split.
+The final predictor aggregates these configurations using a 5-fold Cross-Validation retraining strategy.
