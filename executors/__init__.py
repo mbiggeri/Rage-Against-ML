@@ -1,1 +1,1 @@
-from .executors import OptunaRegressorExecutor, RandomizedSearchRegressionExecutor
+from .executors import OptunaRegressorExecutor, RandomizedSearchRegressionExecutor, GridSearchRegressionExecutor

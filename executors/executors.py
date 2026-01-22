@@ -19,7 +19,7 @@ import json
 import pandas as pd
 import utils.keras as ukeras
 from scikeras.wrappers import KerasRegressor, KerasClassifier
-from sklearn.model_selection import KFold, RandomizedSearchCV
+from sklearn.model_selection import KFold, RandomizedSearchCV, GridSearchCV
 from sklearn.pipeline import Pipeline
 from sklearn.decomposition import PCA
 from scipy.stats import loguniform
@@ -33,13 +33,15 @@ if torch.backends.mps.is_available():
     torch.set_default_dtype(torch.float32)
     mee = MeanEuclidianError("mee", dtype=torch.float32)
     print("set default to float32")
+else:
+    mee = MeanEuclidianError("mee")
 if keras.backend.backend() != "torch":
     print(f"warning: keras backend is set to {keras.backend.backend()}, restart jupyter kernel!!!!")
     raise RuntimeError()
 
 UnitsType = Union[list[tuple[int, int]], list[int]]
 
-class OptunaRegressorExecutor:
+class OptunaExecutor(ABC):
     """
     Optuna-based hyperparameter search executor for Keras regression models.
 
@@ -60,6 +62,7 @@ class OptunaRegressorExecutor:
         self,
         train_loader,
         units: UnitsType,
+        loss: str,
         optuna_base_path: str = "keras/models/optuna",
         pca_input_size: Optional[int] = None,
         use_pca: bool = False,
@@ -74,6 +77,8 @@ class OptunaRegressorExecutor:
         verbose: int = 0,
         baseline: float = None,
         n_jobs: int = 1,
+        default_metrics: list[str] | list[object] = None,
+        scale_y = False
     ):
         self.train_loader = train_loader
         self.units = units
@@ -97,6 +102,9 @@ class OptunaRegressorExecutor:
         self.verbose = verbose
         self.baseline = baseline
         self.n_jobs = n_jobs
+        self.default_metrics = default_metrics
+        self.loss = loss
+        self.scale_y = scale_y
 
     # ----------------------------
     # Utilities
@@ -120,6 +128,34 @@ class OptunaRegressorExecutor:
         os.makedirs(base, exist_ok=True)
         os.makedirs(os.path.join(base, "checkpoints"), exist_ok=True)
 
+    @abstractmethod
+    def _build_model_two_hidden(self, meta, unit1, unit2, learning_rate, lambda_1, lambda_2, 
+                                activation_1, activation_2, dropout_1, dropout_2): pass
+
+    @abstractmethod
+    def _build_model_single_hidden(self, meta, unit1, learning_rate, lambda_1, activation_1, dropout_1): pass
+
+    @abstractmethod
+    def _get_early_stopping_monitor(self): pass
+
+    @abstractmethod
+    def _get_checkpoint_monitor(self): pass
+
+    @abstractmethod
+    def _get_checkpoint_mode(self): pass
+
+    @abstractmethod
+    def _get_default_val_loss(self): pass
+
+    @abstractmethod
+    def _get_n_outputs(self): pass
+
+    @abstractmethod
+    def _get_direction(self): pass
+
+    @abstractmethod
+    def _get_default_metrics(self): pass
+
     # ----------------------------
     # Objective pieces
     # ----------------------------
@@ -134,12 +170,13 @@ class OptunaRegressorExecutor:
     ) -> float:
         unit1, unit2 = u
 
-        # Suggest hyperparameters (exactly as in your snippet)
+# Suggest hyperparameters (exactly as in your snippet)
         lambda_1 = trial.suggest_float("lambda_1", 3e-3, 1e-1, log=True)
         learning_rate = trial.suggest_float("learning_rate", 1e-3, 1e-2, log=True)
         activation_1 = trial.suggest_categorical("activation_1", ["relu", "gelu", "leaky_relu"])
         dropout_1 = trial.suggest_float("dropout_1", 0.2, 0.5, log=True)
-        meta = {"n_outputs_": self.train_loader.dataset.y.shape[1], "n_features_in_": self.pca_input_size if self.use_pca else self.train_loader.dataset.X.shape[1]}
+        meta = {"n_outputs_": self._get_n_outputs(), 
+                "n_features_in_": self.pca_input_size if self.use_pca else self.train_loader.dataset.X.shape[1]}
 
         # Build model
         if unit2 is not None:
@@ -147,7 +184,7 @@ class OptunaRegressorExecutor:
             activation_2 = trial.suggest_categorical("activation_2", ["relu", "gelu", "leaky_relu"])
             dropout_2 = trial.suggest_float("dropout_2", 0.2, 0.5, log=True)
 
-            model = build_model_two_hidden(
+            model = self._build_model_two_hidden(
                 meta=meta,
                 unit1=unit1,
                 unit2=unit2,
@@ -157,31 +194,29 @@ class OptunaRegressorExecutor:
                 activation_1=activation_1,
                 activation_2=activation_2,
                 dropout_1=dropout_1,
-                dropout_2=dropout_2,
-                seed=self.seed,
+                dropout_2=dropout_2
             )
         else:
-            model = build_model_single_hidden(
+            model = self._build_model_single_hidden(
                 meta=meta,
                 unit1=unit1,
                 learning_rate=learning_rate,
                 lambda_1=lambda_1,
                 activation_1=activation_1,
-                dropout_1=dropout_1,
-                seed=self.seed,
+                dropout_1=dropout_1
             )
 
         checkpoint_path = f"{path}/checkpoints/optuna_trial_{trial.number}.keras"
         checkpoint_cb = keras.callbacks.ModelCheckpoint(
             filepath=checkpoint_path,
-            monitor="val_loss",
-            mode="min",
+            monitor=self._get_checkpoint_monitor(),
+            mode=self._get_checkpoint_mode(),
             save_best_only=True,
             save_weights_only=False,
         )
 
         early_stopping_cb = keras.callbacks.EarlyStopping(
-            monitor="val_loss",
+            monitor=self._get_early_stopping_monitor(),
             baseline=self.baseline,
             patience=50,
             verbose=1,
@@ -198,7 +233,7 @@ class OptunaRegressorExecutor:
             callbacks=[checkpoint_cb, early_stopping_cb],
         )
 
-        val_loss = history.history["val_loss"][-1]
+        val_loss = history.history[self._get_default_val_loss()][-1]
         return float(val_loss)
 
     # ----------------------------
@@ -259,7 +294,7 @@ class OptunaRegressorExecutor:
             study = optuna.create_study(
                 study_name=self.study_prefix + name,
                 sampler=self.sampler,
-                direction="minimize",
+                direction=self._get_direction(),
             )
 
             study.optimize(objective_cv, n_trials=self.n_trials, n_jobs=self.n_jobs)
@@ -275,6 +310,114 @@ class OptunaRegressorExecutor:
 
             print(f"Saved: {optuna_results_path}")
             print(f"Saved: {self.optuna_base_path + '/hp.json'}")
+
+class OptunaRegressorExecutor(OptunaExecutor):
+    def _get_checkpoint_mode(self):
+        return "min"
+
+    def _build_model_two_hidden(self, meta, unit1, unit2, learning_rate, lambda_1, lambda_2, 
+                                activation_1, activation_2, dropout_1, dropout_2):
+        n_features = meta["n_features_in_"]
+        output_size = meta["n_outputs_"]
+
+        inputs = keras.Input(shape=(n_features,))
+        x = inputs
+
+        x = keras.layers.Dense(
+                unit1,
+                activation=activation_1,
+                kernel_regularizer=keras.regularizers.l2(lambda_1),
+                kernel_initializer=keras.initializers.GlorotNormal(seed=self.seed)
+            )(x)
+        
+        x = keras.layers.Dropout(
+            rate=dropout_1
+        )(x)
+        
+        x = keras.layers.Dense(
+                unit2,
+                activation=activation_2,
+                kernel_regularizer=keras.regularizers.l2(lambda_2),
+                kernel_initializer=keras.initializers.GlorotNormal(seed=self.seed+1)
+            )(x)
+
+        x = keras.layers.Dropout(
+            rate=dropout_2
+        )(x)
+
+        # Output layer
+        outputs = keras.layers.Dense(output_size)(x)
+
+        model = keras.Model(inputs, outputs)
+
+        optimizer = keras.optimizers.SGD(
+            learning_rate=learning_rate,
+            momentum=0.9,
+            nesterov=True,
+        )
+
+        model.compile(
+            optimizer=optimizer,
+            loss=self.loss,
+            metrics=self.default_metrics,
+        )
+
+        return model
+
+    def _build_model_single_hidden(self, meta, unit1, learning_rate, lambda_1, activation_1, dropout_1):
+        n_features = meta["n_features_in_"]
+        output_size = meta["n_outputs_"]
+
+        inputs = keras.Input(shape=(n_features,))
+        x = inputs
+
+        x = keras.layers.Dense(
+                unit1,
+                activation=activation_1,
+                kernel_regularizer=keras.regularizers.l2(lambda_1),
+                kernel_initializer=keras.initializers.GlorotNormal(seed=self.seed)
+            )(x)
+        
+        x = keras.layers.Dropout(
+            rate=dropout_1
+        )(x)
+        
+        # Output layer
+        outputs = keras.layers.Dense(output_size)(x)
+
+        model = keras.Model(inputs, outputs)
+
+        optimizer = keras.optimizers.SGD(
+            learning_rate=learning_rate,
+            momentum=0.9,
+            nesterov=True,
+        )
+
+        model.compile(
+            optimizer=optimizer,
+            loss=self.loss,
+            metrics=self.default_metrics,
+        )
+
+        return model
+
+    def _get_early_stopping_monitor(self):
+        return "val_loss"
+    
+    def _get_default_metrics(self):
+        return [mee]
+
+    def _get_checkpoint_monitor(self):
+        return "val_loss"
+
+    def _get_default_val_loss(self):
+        return "val_loss"
+
+    def _get_n_outputs(self):
+        return self.train_loader.dataset.y.shape[1]
+
+    def _get_direction(self):
+        return "minimize"
 
 class KerasRandomSearchExecutor(ABC):
     """Classe base astratta (Template Method)"""
@@ -462,6 +605,202 @@ class RandomizedSearchClassificationExecutor(KerasRandomSearchExecutor):
     def _get_default_metrics(self):
         return ["accuracy"]
 
+class KerasGridSearchExecutor(ABC):
+    """Classe base astratta (Template Method) modificata per GridSearchCV"""
+    def __init__(
+            self,
+            train_loader,
+            loss: str = None,
+            scoring: str = None,
+            units: list = None,
+            epochs=1500,
+            batch_size=80,
+            verbose=0,
+            validation_split=.20,
+            baseline: float = None,
+            seed=42,
+            param_grid: dict = None, # Renamed from param_distributions
+            use_PCA=False,
+            # n_iter=100, # REMOVED: Not used in GridSearch
+            save_path="keras/models/gs", # Updated default path
+            n_jobs=1,
+            ):
+        self.train_loader = train_loader
+        self.units = units
+        self.epochs = epochs
+        self.batch_size = batch_size
+        self.verbose = verbose
+        self.validation_split = validation_split
+        self.baseline = baseline
+        self.seed = seed
+        self.use_PCA = use_PCA
+        # self.n_iter = n_iter # REMOVED
+        self.save_path = save_path
+        self.n_jobs = n_jobs
+        
+        # Se non passati, usa i default definiti nelle sottoclassi
+        self.loss = loss or self._get_default_loss()
+        self.scoring = scoring or self._get_default_scoring()
+
+        if param_grid is None:
+            self._params_init()
+        else: 
+            self.param_grid = param_grid
+
+    @abstractmethod
+    def _get_wrapper_class(self):
+        """Ritorna KerasRegressor o KerasClassifier"""
+        pass
+
+    @abstractmethod
+    def _get_default_loss(self): pass
+
+    @abstractmethod
+    def _get_default_scoring(self): pass
+
+    @abstractmethod
+    def _get_default_metrics(self): pass
+
+    def _params_init(self):
+        # NOTE: GridSearch requires DISCRETE LISTS, not distributions.
+        # I have converted the loguniform ranges to representative lists.
+        # BE CAREFUL: The number of combinations grows exponentially.
+        self.param_grid = {
+            "reg__model__learning_rate": [0.001, 0.005, 0.01], # Specific values
+            "reg__model__lambda_1": [0.003, 0.01, 0.1],
+            "reg__model__lambda_2": [0.003, 0.01, 0.1],
+            "reg__model__activation_1": ["relu", "gelu"], # Reduced options to save time, add back if needed
+            "reg__model__activation_2": ["relu", "gelu"],
+            "reg__model__dropout_1": [0.2, 0.4],
+            "reg__model__dropout_2": [0.2, 0.4],
+            "pca__n_components": [2],
+            "reg__model__seed": [self.seed],
+        }
+
+    def _create_keras_wrapper(self, unit2):
+        # LOGICA FISSA: Scelta della build function basata sulla presenza di unit2
+        # Assumed imported functions: build_model_two_hidden, build_model_single_hidden
+        build_fn = build_model_two_hidden if unit2 is not None else build_model_single_hidden
+        
+        wrapper_class = self._get_wrapper_class()
+        return wrapper_class(
+            model=build_fn,
+            epochs=self.epochs,
+            batch_size=self.batch_size,
+            verbose=self.verbose,
+            validation_split=self.validation_split,
+            validation_batch_size=80,
+            callbacks=[keras.callbacks.EarlyStopping],
+            callbacks__0__monitor="val_loss",
+            callbacks__0__baseline=self.baseline,
+            callbacks__0__patience=50,
+            callbacks__0__verbose=1,
+            callbacks__0__min_delta=1e-5,
+            callbacks__0__restore_best_weights=True,
+            loss=self.loss,
+            metrics=self._get_default_metrics()
+        )
+
+    def _make_pipeline(self, regressor, n_components=None):
+        if self.use_PCA:
+            return Pipeline([
+                ("pca", PCA(n_components=n_components)),
+                ("reg", regressor)
+            ])
+        return Pipeline([("reg", regressor)])
+
+    def execute(self):
+        """Il Template Method che orchestra l'esecuzione"""
+        for u in self.units:
+            print(f"=== unit {u} ===")
+            
+            # Create a copy of the grid for this iteration
+            current_grid = dict(self.param_grid)
+            
+            if isinstance(u, int):
+                unit1, unit2 = u, None
+                # Remove parameters specific to the second layer
+                for k in ["reg__model__dropout_2", "reg__model__activation_2", "reg__model__lambda_2"]:
+                    current_grid.pop(k, None)
+            else:
+                unit1, unit2 = u
+                current_grid["reg__model__unit2"] = [unit2]
+
+            current_grid["reg__model__unit1"] = [unit1]
+            if not self.use_PCA:
+                current_grid.pop("pca__n_components", None)
+
+            name = str(unit1) + (f"x{unit2}" if unit2 else "")
+            save_path_subfolder = os.path.join(self.save_path, name)
+            
+            cv = KFold(n_splits=5, shuffle=True, random_state=self.seed)
+            reg = self._create_keras_wrapper(unit2)
+            pipeline = self._make_pipeline(reg)
+
+            # === CHANGED TO GRID SEARCH ===
+            grid_search = GridSearchCV(
+                estimator=pipeline,
+                param_grid=current_grid, 
+                cv=cv,
+                scoring=self.scoring,
+                n_jobs=self.n_jobs,
+            )
+            
+            grid_search.fit(self.train_loader.dataset.X, self.train_loader.dataset.y)
+            
+            # Salvataggio
+            os.makedirs(save_path_subfolder, exist_ok=True)
+            with open(f"{save_path_subfolder}/hp.json", "w") as f:
+                json.dump(grid_search.best_params_, f, indent=2)
+
+            results_df = pd.DataFrame(grid_search.cv_results_)
+            results_df.columns = [c.replace('param_', 'params_') for c in results_df.columns]
+            results_df.to_csv(f"{save_path_subfolder}/cv_results_df.csv", index=False)
+
+            # Re-fit finale del miglior modello
+            best_params = grid_search.best_params_
+            cleaned_hp = {k.replace('reg__', ''): v for k, v in best_params.items() if 'reg__' in k}
+            
+            n_comp = best_params.get("pca__n_components", None)
+            reg.set_params(**cleaned_hp)
+            
+            final_pipeline = self._make_pipeline(reg, n_components=n_comp)
+            final_pipeline.fit(self.train_loader.dataset.X, self.train_loader.dataset.y)
+
+            # --- NEW: SAVING FIT HISTORY ---
+            # Retrieve the fitted regressor from the pipeline steps
+            fitted_reg = final_pipeline.named_steps['reg']
+            
+            # Extract history (Logic depends on wrapper: SciKeras uses .history_, older wrappers use .model.history)
+            history_dict = {}
+            if hasattr(fitted_reg, 'history_'):
+                # SciKeras style
+                history_dict = fitted_reg.history_
+            elif hasattr(fitted_reg, 'model_') and hasattr(fitted_reg.model_, 'history'):
+                # Standard/Older Wrapper style (history is in the underlying Keras model)
+                history_dict = fitted_reg.model_.history.history
+
+            if history_dict:
+                history_df = pd.DataFrame(history_dict)
+                history_df.to_csv(f"{save_path_subfolder}/history.csv", index=False)
+            
+            # Assuming scikeras or wrapped model exposes .model_
+            reg.model_.save(f"{save_path_subfolder}/model.keras")
+
+class GridSearchRegressionExecutor(KerasGridSearchExecutor):
+    def _get_wrapper_class(self):
+        return KerasRegressor
+
+    def _get_default_loss(self):
+        return mee
+
+    def _get_default_scoring(self):
+        return "neg_mean_squared_error"
+
+    def _get_default_metrics(self):
+        return [mee]
+
+
 def build_model_single_hidden(
     meta,
     unit1,
@@ -501,8 +840,8 @@ def build_model_single_hidden(
 
     model.compile(
         optimizer=optimizer,
-        loss="mse",
-        metrics=[mee],
+        loss=mee,
+        metrics=["mse"],
     )
 
     return model
