@@ -74,7 +74,7 @@ def objective(trial, epochs=100):
     if N_COMPONENTS > 0:
         scaler_type = trial.suggest_categorical("scaler_post_pca", ["none", "minmax"])
     else:
-        scaler_type = trial.suggest_categorical("scaler", ["standard", "minmax", "robust", "none"])
+        scaler_type = trial.suggest_categorical("scaler", ["standard"])
 
     def get_scaler(s_type):
         if s_type == "standard": return StandardScaler()
