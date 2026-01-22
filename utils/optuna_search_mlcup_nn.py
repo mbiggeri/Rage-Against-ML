@@ -74,7 +74,7 @@ def objective(trial, epochs=100):
     if N_COMPONENTS > 0:
         scaler_type = trial.suggest_categorical("scaler_post_pca", ["none", "minmax"])
     else:
-        scaler_type = trial.suggest_categorical("scaler", ["standard", "minmax", "robust", "none"])
+        scaler_type = trial.suggest_categorical("scaler", ["standard"])
 
     def get_scaler(s_type):
         if s_type == "standard": return StandardScaler()
@@ -89,17 +89,17 @@ def objective(trial, epochs=100):
     noise_transform = GaussianNoise(std=noise_std, active=True)
 
     #n_layers = trial.suggest_int("n_layers", 3)
-    n_layers = 3
+    n_layers = 2
     hidden_size = trial.suggest_int("hidden_size", 4, 16, log=True)
     hidden_sizes = [hidden_size] * n_layers
     dropout = trial.suggest_float("dropout", 0.1, 0.5)
     weight_decay = trial.suggest_float("weight_decay", 1e-6, 1e-3, log=True)
     activation = trial.suggest_categorical("activation", ["relu", "gelu", "silu", "mish"])
     
-    # --- CRITICAL FIX: Safe Learning Rates ---
+    # --- Learning Rates ---
     if not use_target_scaling:
         # If targets are raw (large values), LR must be tiny to prevent explosion
-        lr = trial.suggest_float("lr", 1e-5, 1e-3, log=True) 
+        lr = trial.suggest_float("lr", 1e-5, 1e-3, log=True)
     else:
         # If targets are scaled (approx 0-1), standard LRs work
         lr = trial.suggest_float("lr", 1e-4, 1e-1, log=True)

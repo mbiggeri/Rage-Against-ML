@@ -1,4 +1,106 @@
 {
-    "CUP": {
+    "Monk-1": {
         "PyTorch": {
-            "internal_test_MEE": 
+            "test_accuracy": 1.0,
+            "config": {
+                "lr": 0.1,
+                "momentum": 0.9,
+                "hidden_units": 8,
+                "weight_decay": 0.0,
+                "epochs": 500
+            },
+            "test_mse": 0.0020289924168200406,
+            "train_mse": 1.0300282156094909e-05
+        },
+        "Keras": {
+            "test_accuracy": 1.0,
+            "config": {
+                "lr": 0.05,
+                "momentum": 0.9,
+                "hidden_units": 4,
+                "l2_reg": 0.0,
+                "epochs": 500
+            },
+            "test_mse": 0.00415521164127305,
+            "train_mse": 0.00038480335891614
+        }
+    },
+    "Monk-2": {
+        "PyTorch": {
+            "test_accuracy": 1.0,
+            "config": {
+                "lr": 0.1,
+                "momentum": 0.9,
+                "hidden_units": 8,
+                "weight_decay": 0.0,
+                "epochs": 500
+            },
+            "test_mse": 9.438458989650286e-06,
+            "train_mse": 5.744612066979137e-06
+        },
+        "Keras": {
+            "test_accuracy": 1.0,
+            "config": {
+                "lr": 0.1,
+                "momentum": 0.9,
+                "hidden_units": 4,
+                "l2_reg": 0.0,
+                "epochs": 500
+            },
+            "test_mse": 7.986199395326286e-05,
+            "train_mse": 5.662356517435945e-05
+        }
+    },
+    "Monk-3": {
+        "PyTorch": {
+            "test_accuracy": 0.9699074074074074,
+            "config": {
+                "lr": 0.01,
+                "momentum": 0.9,
+                "hidden_units": 8,
+                "weight_decay": 0.0,
+                "epochs": 500
+            },
+            "test_mse": 0.033769947511178476,
+            "train_mse": 0.04333990933943768
+        },
+        "Keras": {
+            "test_accuracy": 0.9722222089767456,
+            "config": {
+                "lr": 0.005,
+                "momentum": 0.9,
+                "hidden_units": 8,
+                "l2_reg": 0.0,
+                "epochs": 200
+            },
+            "test_mse": 0.0555875254646808,
+            "train_mse": 0.06710319150842736
+        }
+    },
+    "Monk-3-Reg": {
+        "PyTorch": {
+            "test_accuracy": 0.9745370370370371,
+            "config": {
+                "lr": 0.01,
+                "momentum": 0.9,
+                "hidden_units": 4,
+                "weight_decay": 0.0001,
+                "epochs": 500
+            },
+            "test_mse": 0.02721656803731565,
+            "train_mse": 0.047596590859549384
+        },
+        "Keras": {
+            "test_accuracy": 0.9722222089767456,
+            "config": {
+                "lr": 0.005,
+                "momentum": 0.9,
+                "hidden_units": 4,
+                "l2_reg": 0.0001,
+                "epochs": 500
+            },
+            "test_mse": 0.04110805395707911,
+            "train_mse": 0.053930870253053105
+        }
+    }
+}
