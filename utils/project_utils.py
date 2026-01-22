@@ -38,7 +38,7 @@ def update_json(task, model_name, metrics_dict, filename='all_results.json'):
     
     print(f"Updated {filename} for Task: {task}, Model: {model_name}")
 
-def standard_plot(history_dict, title, filename):
+def standard_plot(history_dict, title, filename, baseline_value=None, baseline_label="Baseline", test_score=None, test_score_label="Test Score"):
     """
     Generates a 2-subplot graph (Loss | Metric).
     Checks if val_loss exists (skip plotting validation if not).
@@ -48,6 +48,10 @@ def standard_plot(history_dict, title, filename):
                              Expected keys: 'loss', 'val_loss' (optional), and one metric key pair.
         title (str): Title for the plot.
         filename (str): Filename to save the plot.
+        baseline_value (float, optional): Value to plot as a horizontal baseline.
+        baseline_label (str, optional): Label for the baseline.
+        test_score (float, optional): Final test score to display in the title.
+        test_score_label (str, optional): Label for the test score (e.g., "Test Acc").
     """
     plt.figure(figsize=(12, 5))
     
@@ -76,7 +80,16 @@ def standard_plot(history_dict, title, filename):
         elif 'test_' + metric in history_dict: # Handle test_metric naming if applicable
              plt.plot(history_dict['test_' + metric], label=f'Test {metric}')
 
-        plt.title(f'{title} - {metric}')
+        if baseline_value is not None:
+             plt.axhline(y=baseline_value, color='grey', linestyle='--', label=baseline_label)
+
+        if test_score is not None:
+             plt.axhline(y=test_score, color='blue', linestyle='-.', label=f"{test_score_label}: {test_score:.4f}")
+        
+        # Add Test Score to Title
+        metric_title = f'{title} - {metric}'
+            
+        plt.title(metric_title)
         plt.xlabel('Epochs')
         plt.ylabel(metric)
         plt.legend()

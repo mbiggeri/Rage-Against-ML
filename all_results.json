@@ -1,4 +1,90 @@
 {
-    "CUP": {
+    "Monk-1": {
         "PyTorch": {
-            "internal_test_MEE": 
+            "test_accuracy": 1.0,
+            "config": {
+                "lr": 0.01,
+                "momentum": 0.9,
+                "hidden_units": 4,
+                "weight_decay": 0.0,
+                "epochs": 5000
+            }
+        },
+        "Keras": {
+            "test_accuracy": 0.9768518805503845,
+            "config": {
+                "lr": 0.01,
+                "momentum": 0.5,
+                "hidden_units": 4,
+                "l2_reg": 0.0,
+                "epochs": 5000
+            }
+        }
+    },
+    "Monk-2": {
+        "PyTorch": {
+            "test_accuracy": 1.0,
+            "config": {
+                "lr": 0.001,
+                "momentum": 0.9,
+                "hidden_units": 4,
+                "weight_decay": 0.0,
+                "epochs": 5000
+            }
+        },
+        "Keras": {
+            "test_accuracy": 1.0,
+            "config": {
+                "lr": 0.01,
+                "momentum": 0.5,
+                "hidden_units": 4,
+                "l2_reg": 0.0,
+                "epochs": 5000
+            }
+        }
+    },
+    "Monk-3": {
+        "PyTorch": {
+            "test_accuracy": 0.9722222222222222,
+            "config": {
+                "lr": 0.001,
+                "momentum": 0.5,
+                "hidden_units": 4,
+                "weight_decay": 0.0,
+                "epochs": 5000
+            }
+        },
+        "Keras": {
+            "test_accuracy": 0.9328703880310059,
+            "config": {
+                "lr": 0.01,
+                "momentum": 0.5,
+                "hidden_units": 4,
+                "l2_reg": 0.0,
+                "epochs": 5000
+            }
+        }
+    },
+    "Monk-3-Reg": {
+        "PyTorch": {
+            "test_accuracy": 0.9722222222222222,
+            "config": {
+                "lr": 0.001,
+                "momentum": 0.5,
+                "hidden_units": 4,
+                "weight_decay": 0.0001,
+                "epochs": 5000
+            }
+        },
+        "Keras": {
+            "test_accuracy": 0.9722222089767456,
+            "config": {
+                "lr": 0.001,
+                "momentum": 0.5,
+                "hidden_units": 4,
+                "l2_reg": 0.0001,
+                "epochs": 5000
+            }
+        }
+    }
+}
