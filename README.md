@@ -11,7 +11,7 @@ These notebooks are used for exploration, analysis, and running experiments inte
 
 
 * **`svm_analysis.ipynb`**
-* Dedicated to Support Vector Machines (SVM). It handles data loading, preprocessing, hyperparameter tuning (using Random Search), and performance evaluation for SVM models on both Monk and CUP tasks.
+* Dedicated to Support Vector Machines (SVM). It handles data loading, preprocessing, hyperparameter search using Grid Search, Random Search or Optuna and performance evaluation for SVM models on both Monk and CUP tasks.
 
 
 * **`keras_nn.ipynb`**
@@ -50,7 +50,7 @@ Reusable code organized by functionality.
 
 * **`data_loader.py`**: Functions to load CSV files (`ML-CUP25-TR.csv`, `monks-*.csv`), handle parsing, and perform initial preprocessing.
 * **`plot.py`**: Visualization utilities to generate consistent plots for learning curves (Loss/MEE vs. Epochs) and model comparisons.
-* **`optuna.py`**: Helper functions to streamline Optuna studies, such as saving/loading study databases or defining objective functions.
+* **`optuna_utils.py`**: Helper functions to streamline Optuna studies, such as saving/loading study databases or defining objective functions.
 * **`keras.py`**: Utilities specific to Keras models, possibly custom callbacks or layer definitions.
 
 ### `losses/`
